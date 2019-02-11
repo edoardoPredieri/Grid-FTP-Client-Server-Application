@@ -9,6 +9,9 @@
 
 #include "common.h"
 
+int ID = 001;
+
+
 int main(int argc, char* argv[]){
     int ret;
 
@@ -40,9 +43,19 @@ int main(int argc, char* argv[]){
         if (errno == EINTR) continue;
         ERROR_HELPER(-1, "Cannot read from socket");
     }
+    
     buf[msg_len] = '\0';
     printf("%s", buf);
-
+    
+    // send ID to Server for eventually
+    sprintf(buf, "%d\n", ID);
+    msg_len = strlen(buf);
+    while ((ret = send(socket_desc, buf, msg_len, 0)) < 0){
+        if (errno == EINTR)
+            continue;
+        ERROR_HELPER(-1, "Cannot send ID");
+    }
+    
     // main loop
     while (1) {
         char* quit_command = SERVER_COMMAND;

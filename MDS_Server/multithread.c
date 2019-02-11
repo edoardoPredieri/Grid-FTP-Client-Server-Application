@@ -16,6 +16,13 @@ typedef struct handler_args_s {
     struct sockaddr_in *client_addr;
 } handler_args_t;
 
+
+void verify_client(int id){
+	
+	
+	return;
+}
+
 void *connection_handler(void *arg){
     handler_args_t *args = (handler_args_t *)arg;
 
@@ -34,7 +41,7 @@ void *connection_handler(void *arg){
     // parse client IP address and port
     char client_ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &(client_addr->sin_addr), client_ip, INET_ADDRSTRLEN);
-    uint16_t client_port = ntohs(client_addr->sin_port); // port number is an unsigned short
+    uint16_t client_port = ntohs(client_addr->sin_port);
 
     // send welcome message
     sprintf(buf, "Welcome to Grid FTP Client-Server Application made by Edoardo Predieri. I will stop if you send me %s \n", quit_command);
@@ -44,6 +51,22 @@ void *connection_handler(void *arg){
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket");
     }
+    
+    
+    // receive the ID from Client
+    while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
+        if (errno == EINTR) continue;
+        ERROR_HELPER(-1, "Cannot read ID from Client");
+    }
+    
+    buf[msg_len] = '\0';
+    
+    // save and verify Client ID
+    int client_id = atoi(buf);
+    printf("client ID = %d\n", client_id);
+
+	verify_client(client_id);
+    
 
     // echo loop
     while (1){
