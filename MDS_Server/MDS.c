@@ -16,16 +16,81 @@ typedef struct handler_args_s {
     struct sockaddr_in *client_addr;
 } handler_args_t;
 
-
 typedef struct client {
     int pos;
     int id;
     char* key;
 } client;
 
+typedef struct dr {
+    int pos;
+    //int ip;
+    int port;
+    int* mem;
+} dr;
+
 int num_client=0;
-char* path = "login.txt";
+int num_dr=0;
+char* pathL = "login.txt";
+char* pathD = "dr.txt";
 client** clientList;
+dr** drList;
+
+
+// controll the online DRs
+void init(){
+	FILE* f = fopen(pathD, "r");
+	while(1){
+        char* tmp=malloc(sizeof(char)*3);
+
+        if(fscanf(f,"%s",tmp)==EOF){
+            break;
+        }
+        
+        // try connection
+        int ret;
+
+		// variables for handling a socket
+		int socket_desc;
+		struct sockaddr_in server_addr = {0}; 
+
+		// create a socket
+		socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+		ERROR_HELPER(socket_desc, "Could not create socket");
+
+		// set up parameters for the connection
+		server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDRESS);
+		server_addr.sin_family      = AF_INET;
+		server_addr.sin_port        = htons(atoi(tmp));
+
+		// initiate a connection on the socket
+		ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
+		if(ret==-1){
+			printf("DR offline\n");
+			continue;
+		}
+		
+		if (DEBUG){
+			fprintf(stderr, "DR n:%d online\n",num_dr);
+			struct dr* drTmp = malloc(sizeof(dr));
+			drTmp->pos=num_dr;
+			//drTmp->ip=atoi(tmp);
+			drTmp->port=atoi(tmp); 
+			drTmp->mem=(int*)malloc(sizeof(int)*10);
+
+			drList=(dr**)realloc(drList, (num_dr+1)*sizeof(dr*));
+			drList[num_dr]=drTmp;
+			num_dr++;
+			
+		}
+		
+		ret = close(socket_desc);
+		ERROR_HELPER(ret, "Cannot close socket");
+	
+        free(tmp);
+    }
+    fclose(f);
+}
 
 // create a random string
 char* randstring(size_t length) {
@@ -49,10 +114,8 @@ char* randstring(size_t length) {
     return randomString;
 }
 
-
-
 int verify_client(int id, int socket_desc, struct client* tmpClient){
-    FILE* f = fopen(path, "r");
+    FILE* f = fopen(pathL, "r");
     int ret;
     char* key = randstring(8);
     
@@ -171,7 +234,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
     
     fclose(f);
     
-    f = fopen(path, "a");
+    f = fopen(pathL, "a");
     
     // send register request to client
     char buf[1024];
@@ -215,12 +278,13 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
 
 void *connection_handler(void *arg){
     
-    num_client++;
-    clientList=(client**)realloc(clientList, num_client*sizeof(client*));
+    clientList=(client**)realloc(clientList, (num_client+1)*sizeof(client*));
     
     struct client* tmpClient =(client*)malloc(sizeof(client));
     tmpClient->pos=num_client;
     clientList[num_client]=tmpClient;
+    
+    num_client++;
     
     handler_args_t *args = (handler_args_t *)arg;
 
@@ -303,8 +367,13 @@ void *connection_handler(void *arg){
 }
 
 int main(int argc, char *argv[]){
+	
+	init();
+	
+	printf("END setup phase\n");
     
     clientList = (client**)malloc(sizeof(client*)*num_client);
+    drList = (dr**)malloc(sizeof(dr*)*num_dr);
     
     int ret;
 
@@ -357,7 +426,7 @@ int main(int argc, char *argv[]){
         handler_args_t *thread_args = malloc(sizeof(handler_args_t));
         thread_args->socket_desc = client_desc;
         thread_args->client_addr = client_addr;
-
+        
         ret = pthread_create(&thread, NULL, connection_handler, (void *)thread_args);
         PTHREAD_ERROR_HELPER(ret, "Could not create a new thread");
 
