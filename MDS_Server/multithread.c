@@ -11,16 +11,167 @@
 
 #include "common.h"
 
+char* path = "login.txt";
+
 typedef struct handler_args_s {
     int socket_desc;
     struct sockaddr_in *client_addr;
 } handler_args_t;
 
 
-void verify_client(int id){
-	
-	
-	return;
+int verify_client(int id, int socket_desc){
+    FILE* f = fopen(path, "r");
+    int ret;
+ 
+    while(1){
+        char* tmp=malloc(sizeof(char)*3);
+
+        if(fscanf(f,"%s",tmp)==EOF){
+            break;
+        }
+        
+        // verify if the client is already registered
+        if(atoi(tmp)==id){
+            
+                char* passw = malloc(sizeof(char)*20);
+                fscanf(f,"%s",passw);
+                
+                // send login request to client
+                char buf[1024];
+                size_t buf_len = sizeof(buf);
+                size_t msg_len;
+                
+                sprintf(buf, "Welcome Client n:%d, to login type: Auth <Userid> <Password>\n", id);
+                while ((ret = send(socket_desc, buf, 61, 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                ERROR_HELPER(-1, "Cannot write to the socket (password request)");
+                }
+                
+                // receive password from client
+                while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
+                    if (errno == EINTR) continue;
+                        ERROR_HELPER(-1, "Cannot read Password from Client");
+                }
+                
+                buf[msg_len] = '\0';
+                
+                // forge the Auth query
+                char* query =(char*) malloc(sizeof(char)*5000);
+                strcat(query,"Auth ");
+                strcat(query,tmp);
+                strcat(query," ");
+                strcat(query,passw);
+                
+                // compare the quety with login
+                if (strcmp(query, buf)==0){
+                    sprintf(buf, "OK\n");
+                    while ((ret = send(socket_desc, buf, 3, 0)) < 0){
+                        if (errno == EINTR)
+                            continue;
+                        ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
+                    }
+                    free(query);
+                    free(tmp);
+                    fclose(f);
+                    return 1;
+                }
+                
+                else{
+                    sprintf(buf, "NOK\n");
+                    while ((ret = send(socket_desc, buf, 4, 0)) < 0){
+                        if (errno == EINTR)
+                            continue;
+                        ERROR_HELPER(-1, "Cannot write to the socket (wrong password)");
+                    }
+                    
+                    // receive password from client 2th
+                    while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
+                        if (errno == EINTR) continue;
+                        ERROR_HELPER(-1, "Cannot read Password from Client");
+                    }
+                
+                    buf[msg_len] = '\0';
+        
+                    char* query =(char*) malloc(sizeof(char)*5000);
+                    strcat(query,"Auth ");
+                    strcat(query,tmp);
+                    strcat(query," ");
+                    strcat(query,passw);
+                
+                    if (strcmp(query, buf)==0){
+                        sprintf(buf, "OK\n");
+                        while ((ret = send(socket_desc, buf, 3, 0)) < 0){
+                            if (errno == EINTR)
+                                continue;
+                            ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
+                        }
+                        free(query);
+                        free(tmp);
+                        fclose(f);
+                        return 1;
+                    }
+                
+                    else{
+                        sprintf(buf, "NOK\n");
+                        while ((ret = send(socket_desc, buf, 4, 0)) < 0){
+                            if (errno == EINTR)
+                                continue;
+                            ERROR_HELPER(-1, "Cannot write to the socket (wrong password)");
+                        }
+                        free(query);
+                        free(tmp);
+                        fclose(f);
+                        
+                        return 0;
+                    }
+                }
+        }
+        free(tmp);
+    }
+    
+    fclose(f);
+    
+    f = fopen(path, "a");
+    
+    // send register request to client
+    char buf[1024];
+    size_t buf_len = sizeof(buf);
+    size_t msg_len;
+               
+    sprintf(buf, "Welcome Client n:%d, to register type: Auth <Userid> <Password>\n", id);
+    while ((ret = send(socket_desc, buf, 64, 0)) < 0){
+        if (errno == EINTR)
+            continue;
+        ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
+    }
+        
+    // receive password from client 2th
+    while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
+            if (errno == EINTR) continue;
+            ERROR_HELPER(-1, "Cannot read Password from Client");
+    }
+        
+    buf[msg_len] = '\0';
+        
+    char* query =(char*) malloc(sizeof(char)*5000);
+    strcat(query,"id");
+    strcat(query," ");
+    strcat(query,buf);
+                
+    // write on file
+    fprintf(f,"%s",query);
+    
+    sprintf(buf, "OK\n");
+    while ((ret = send(socket_desc, buf, 3, 0)) < 0){
+        if (errno == EINTR)
+            continue;
+        ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
+    }
+    
+    fclose(f);
+    free(query);
+	return 1;
 }
 
 void *connection_handler(void *arg){
@@ -44,14 +195,13 @@ void *connection_handler(void *arg){
     uint16_t client_port = ntohs(client_addr->sin_port);
 
     // send welcome message
-    sprintf(buf, "Welcome to Grid FTP Client-Server Application made by Edoardo Predieri. I will stop if you send me %s \n", quit_command);
+    sprintf(buf, "Welcome to Grid FTP Client-Server Application made by Edoardo Predieri. I will stop if you send me %s, Press 'Send' \n", quit_command);
     msg_len = strlen(buf);
     while ((ret = send(socket_desc, buf, msg_len, 0)) < 0){
         if (errno == EINTR)
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket");
     }
-    
     
     // receive the ID from Client
     while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
@@ -65,31 +215,29 @@ void *connection_handler(void *arg){
     int client_id = atoi(buf);
     printf("client ID = %d\n", client_id);
 
-	verify_client(client_id);
-    
+	if(verify_client(client_id, socket_desc)){
+        // echo loop
+        while (1){
+            // read message from client
+            while ((recv_bytes = recv(socket_desc, buf, buf_len, 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                ERROR_HELPER(-1, "Cannot read from socket");
+            }
 
-    // echo loop
-    while (1){
-        // read message from client
-        while ((recv_bytes = recv(socket_desc, buf, buf_len, 0)) < 0){
-            if (errno == EINTR)
-                continue;
-            ERROR_HELPER(-1, "Cannot read from socket");
-        }
+            // check whether I have just been told to quit...
+            if (recv_bytes == 0) break;
+            if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
+                break;
 
-        // check whether I have just been told to quit...
-        if (recv_bytes == 0) break;
-        if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
-            break;
-
-        // ... or if I have to send the message back
-        while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
-            if (errno == EINTR)
-                continue;
-            ERROR_HELPER(-1, "Cannot write to the socket");
+            // ... or if I have to send the message back
+            while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                ERROR_HELPER(-1, "Cannot write to the socket");
+            }
         }
     }
-
     // close socket
     ret = close(socket_desc);
     ERROR_HELPER(ret, "Cannot close socket for incoming connection");
