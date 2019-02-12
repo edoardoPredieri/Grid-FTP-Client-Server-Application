@@ -11,17 +11,54 @@
 
 #include "common.h"
 
-char* path = "login.txt";
-
 typedef struct handler_args_s {
     int socket_desc;
     struct sockaddr_in *client_addr;
 } handler_args_t;
 
 
-int verify_client(int id, int socket_desc){
+typedef struct client {
+    int pos;
+    int id;
+    char* key;
+} client;
+
+int num_client=0;
+char* path = "login.txt";
+client** clientList;
+
+// create a random string
+char* randstring(size_t length) {
+    static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-#'?!";        
+    char *randomString = NULL;
+
+    if (length) {
+        randomString = malloc(sizeof(char) * (length +1));
+
+        if (randomString) {   
+            int n;         
+            for (n = 0;n < length;n++) {            
+                int key = rand() % (int)(sizeof(charset) -1);
+                randomString[n] = charset[key];
+            }
+
+            randomString[length] = '\0';
+        }
+    }
+
+    return randomString;
+}
+
+
+
+int verify_client(int id, int socket_desc, struct client* tmpClient){
     FILE* f = fopen(path, "r");
     int ret;
+    char* key = randstring(8);
+    
+    tmpClient->id=id;
+    tmpClient->key=key;
+        
  
     while(1){
         char* tmp=malloc(sizeof(char)*3);
@@ -65,12 +102,14 @@ int verify_client(int id, int socket_desc){
                 
                 // compare the quety with login
                 if (strcmp(query, buf)==0){
-                    sprintf(buf, "OK\n");
-                    while ((ret = send(socket_desc, buf, 3, 0)) < 0){
+                    
+                    strcpy(buf, key);
+                    while ((ret = send(socket_desc, buf, 8, 0)) < 0){
                         if (errno == EINTR)
                             continue;
                         ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
                     }
+                    
                     free(query);
                     free(tmp);
                     fclose(f);
@@ -100,8 +139,8 @@ int verify_client(int id, int socket_desc){
                     strcat(query,passw);
                 
                     if (strcmp(query, buf)==0){
-                        sprintf(buf, "OK\n");
-                        while ((ret = send(socket_desc, buf, 3, 0)) < 0){
+                        strcpy(buf, key);
+                        while ((ret = send(socket_desc, buf, 8, 0)) < 0){
                             if (errno == EINTR)
                                 continue;
                             ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
@@ -175,6 +214,14 @@ int verify_client(int id, int socket_desc){
 }
 
 void *connection_handler(void *arg){
+    
+    num_client++;
+    clientList=(client**)realloc(clientList, num_client*sizeof(client*));
+    
+    struct client* tmpClient =(client*)malloc(sizeof(client));
+    tmpClient->pos=num_client;
+    clientList[num_client]=tmpClient;
+    
     handler_args_t *args = (handler_args_t *)arg;
 
     int socket_desc = args->socket_desc;
@@ -215,7 +262,7 @@ void *connection_handler(void *arg){
     int client_id = atoi(buf);
     printf("client ID = %d\n", client_id);
 
-	if(verify_client(client_id, socket_desc)){
+	if(verify_client(client_id, socket_desc, tmpClient)){
         // echo loop
         while (1){
             // read message from client
@@ -245,12 +292,20 @@ void *connection_handler(void *arg){
     if (DEBUG)
         fprintf(stderr, "Thread created to handle the request has completed.\n");
 
+
+    free(tmpClient);
+    clientList[num_client]=NULL;
+    num_client--;
+
     free(args->client_addr);
     free(args);
     pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[]){
+    
+    clientList = (client**)malloc(sizeof(client*)*num_client);
+    
     int ret;
 
     int socket_desc, client_desc;
