@@ -99,7 +99,7 @@ void *connection_handler(void *arg){
                 char** query=str_split(buf,' ');
                 char* key=query[1];
                 
-                
+                printf("ok\n");//da aggiungere salvataggio kiave !!!!
                 
                 sprintf(buf, "OK");
                 msg_len = strlen(buf);
