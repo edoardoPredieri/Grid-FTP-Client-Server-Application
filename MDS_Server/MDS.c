@@ -30,16 +30,23 @@ typedef struct dr {
 } dr;
 
 int num_client=0;
-int num_dr=0;
 char* pathL = "login.txt";
 char* pathD = "dr.txt";
 client** clientList;
-dr** drList;
 
+// converts to String from Int
+char* itoa(int i){
+    char* ret =malloc(sizeof(char)*i);
+    sprintf(ret,"%d",i);
+    return ret;
+}
 
 // controll the online DRs
-void init(){
+dr** init(){
+    dr** drList = (dr**)malloc(sizeof(dr*)*5);
 	FILE* f = fopen(pathD, "r");
+    int i=0;
+    
 	while(1){
         char* tmp=malloc(sizeof(char)*3);
 
@@ -66,30 +73,47 @@ void init(){
 		// initiate a connection on the socket
 		ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
 		if(ret==-1){
-			printf("DR offline\n");
+			printf("DR n:%d offline\n",i);
+            i++;
 			continue;
 		}
 		
-		if (DEBUG){
-			fprintf(stderr, "DR n:%d online\n",num_dr);
+		else {
+			fprintf(stderr, "DR n:%d online\n",i);
 			struct dr* drTmp = malloc(sizeof(dr));
-			drTmp->pos=num_dr;
+			drTmp->pos=i;
 			//drTmp->ip=atoi(tmp);
 			drTmp->port=atoi(tmp); 
 			drTmp->mem=(int*)malloc(sizeof(int)*10);
-
-			drList=(dr**)realloc(drList, (num_dr+1)*sizeof(dr*));
-			drList[num_dr]=drTmp;
-			num_dr++;
-			
+            
+			drList[i]=drTmp;
+			i++;
+            free(tmp);
 		}
-		
 		ret = close(socket_desc);
 		ERROR_HELPER(ret, "Cannot close socket");
 	
-        free(tmp);
     }
     fclose(f);
+    return drList;
+}
+
+char* getDR(int socket_desc){
+    dr** drList=init();
+    
+    int i=0;
+    int ret;
+   
+    char* s=(char*)malloc(sizeof(char)*1024);
+    
+    while (drList[i]!=NULL){
+        if(drList[i]->port > 2015 && drList[i]->port < 2020){
+            strcat(s, itoa(drList[i]->port));
+            strcat(s, " ");
+        }
+        i++;
+    }
+    return s;
 }
 
 // create a random string
@@ -121,8 +145,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
     
     tmpClient->id=id;
     tmpClient->key=key;
-        
- 
+    
     while(1){
         char* tmp=malloc(sizeof(char)*3);
 
@@ -142,7 +165,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                 size_t msg_len;
                 
                 sprintf(buf, "Welcome Client n:%d, to login type: Auth <Userid> <Password>\n", id);
-                while ((ret = send(socket_desc, buf, 61, 0)) < 0){
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                     if (errno == EINTR)
                         continue;
                 ERROR_HELPER(-1, "Cannot write to the socket (password request)");
@@ -165,9 +188,8 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                 
                 // compare the quety with login
                 if (strcmp(query, buf)==0){
-                    
-                    strcpy(buf, key);
-                    while ((ret = send(socket_desc, buf, 8, 0)) < 0){
+                    sprintf(buf,"%s", key);
+                    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                         if (errno == EINTR)
                             continue;
                         ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
@@ -180,8 +202,8 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                 }
                 
                 else{
-                    sprintf(buf, "NOK\n");
-                    while ((ret = send(socket_desc, buf, 4, 0)) < 0){
+                    sprintf(buf, "NOK you can retry again\n");
+                    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                         if (errno == EINTR)
                             continue;
                         ERROR_HELPER(-1, "Cannot write to the socket (wrong password)");
@@ -202,8 +224,8 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                     strcat(query,passw);
                 
                     if (strcmp(query, buf)==0){
-                        strcpy(buf, key);
-                        while ((ret = send(socket_desc, buf, 8, 0)) < 0){
+                        sprintf(buf,"%s", key);
+                        while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                             if (errno == EINTR)
                                 continue;
                             ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
@@ -215,8 +237,8 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                     }
                 
                     else{
-                        sprintf(buf, "NOK\n");
-                        while ((ret = send(socket_desc, buf, 4, 0)) < 0){
+                        sprintf(buf, "NOK, Bye\n");
+                        while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                             if (errno == EINTR)
                                 continue;
                             ERROR_HELPER(-1, "Cannot write to the socket (wrong password)");
@@ -242,7 +264,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
     size_t msg_len;
                
     sprintf(buf, "Welcome Client n:%d, to register type: Auth <Userid> <Password>\n", id);
-    while ((ret = send(socket_desc, buf, 64, 0)) < 0){
+    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
         if (errno == EINTR)
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
@@ -265,7 +287,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
     fprintf(f,"%s",query);
     
     sprintf(buf, "OK\n");
-    while ((ret = send(socket_desc, buf, 3, 0)) < 0){
+    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
         if (errno == EINTR)
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
@@ -277,6 +299,8 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
 }
 
 void *connection_handler(void *arg){
+    
+    dr** drList;
     
     clientList=(client**)realloc(clientList, (num_client+1)*sizeof(client*));
     
@@ -341,11 +365,25 @@ void *connection_handler(void *arg){
             if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
                 break;
 
-            // ... or if I have to send the message back
-            while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
+            // if I receive GetDR command
+            if(strncmp (buf, "GetDR",5 )==0){
+                char* ipList=getDR(socket_desc);
+                sprintf(buf,"%s",ipList);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
-                ERROR_HELPER(-1, "Cannot write to the socket");
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+            }
+
+
+            else{
+                // ... or if I have to send the message back
+                while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
             }
         }
     }
@@ -367,13 +405,8 @@ void *connection_handler(void *arg){
 }
 
 int main(int argc, char *argv[]){
-	
-	init();
-	
-	printf("END setup phase\n");
-    
+	    
     clientList = (client**)malloc(sizeof(client*)*num_client);
-    drList = (dr**)malloc(sizeof(dr*)*num_dr);
     
     int ret;
 
