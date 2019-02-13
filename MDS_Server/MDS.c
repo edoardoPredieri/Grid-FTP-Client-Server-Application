@@ -5,9 +5,11 @@
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
 #include <arpa/inet.h>  // htons()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h>
+
 
 #include "common.h"
 
@@ -26,13 +28,56 @@ typedef struct dr {
     int pos;
     //int ip;
     int port;
-    int* mem;
+    int mem;
 } dr;
 
 int num_client=0;
 char* pathL = "login.txt";
 char* pathD = "dr.txt";
 client** clientList;
+
+// split command
+char** str_split(char* a_str, const char a_delim){
+    char** result    = 0;
+    size_t count     = 0;
+    char* tmp        = a_str;
+    char* last_comma = 0;
+    char delim[2];
+    delim[0] = a_delim;
+    delim[1] = 0;
+
+    // count how many elements will be extracted
+    while (*tmp){
+        if (a_delim == *tmp){
+            count++;
+            last_comma = tmp;
+        }
+        tmp++;
+    }
+
+    // Add space for trailing token
+    count += last_comma < (a_str + strlen(a_str) - 1);
+
+    // Add space for terminating null string so caller knows where the list of returned strings ends
+    count++;
+
+    result = malloc(sizeof(char*) * count);
+
+    if (result){
+        size_t idx  = 0;
+        char* token = strtok(a_str, delim);
+
+        while (token){
+            assert(idx < count);
+            *(result + idx++) = strdup(token);
+            token = strtok(0, delim);
+        }
+        assert(idx == count - 1);
+        *(result + idx) = 0;
+    }
+
+    return result;
+}
 
 // converts to String from Int
 char* itoa(int i){
@@ -42,8 +87,7 @@ char* itoa(int i){
 }
 
 // controll the online DRs
-dr** init(){
-    dr** drList = (dr**)malloc(sizeof(dr*)*5);
+dr** init(dr*** drList){
 	FILE* f = fopen(pathD, "r");
     int i=0;
     
@@ -84,9 +128,9 @@ dr** init(){
 			drTmp->pos=i;
 			//drTmp->ip=atoi(tmp);
 			drTmp->port=atoi(tmp); 
-			drTmp->mem=(int*)malloc(sizeof(int)*10);
+			drTmp->mem=10;
             
-			drList[i]=drTmp;
+			*(drList)[i]=drTmp;
 			i++;
             free(tmp);
 		}
@@ -95,11 +139,11 @@ dr** init(){
 	
     }
     fclose(f);
-    return drList;
+    return *drList;
 }
 
-char* getDR(int socket_desc){
-    dr** drList=init();
+char* getDR(int socket_desc, dr*** l){
+    dr** drList=init(l);
     
     int i=0;
     int ret;
@@ -113,6 +157,89 @@ char* getDR(int socket_desc){
         }
         i++;
     }
+    return s;
+}
+
+char* Put(int socket_desc, char* k, int size, int* drOnline){
+    char* s=(char*)malloc(sizeof(char)*1024);
+    
+    int* drList = (int*)malloc(sizeof(int)*5);
+	FILE* f = fopen(pathD, "r");
+    int i=0;
+
+    
+	while(1){
+        char* tmp=malloc(sizeof(char)*3);
+
+        if(fscanf(f,"%s",tmp)==EOF){
+            break;
+        }
+        
+        // try connection
+        int ret;
+
+		// variables for handling a socket
+		int socket_desc;
+		struct sockaddr_in server_addr = {0}; 
+
+		// create a socket
+		socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+		ERROR_HELPER(socket_desc, "Could not create socket");
+
+		// set up parameters for the connection
+		server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDRESS);
+		server_addr.sin_family      = AF_INET;
+		server_addr.sin_port        = htons(atoi(tmp));
+
+		// initiate a connection on the socket
+		ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
+		if(ret==-1){
+			continue;
+		}
+		
+		else {
+			char buf[1024];
+            size_t buf_len = sizeof(buf);
+            size_t msg_len;
+            
+            // send welcome message
+            sprintf(buf, "Save %s",k);
+            msg_len = strlen(buf);
+            while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+            if (errno == EINTR)
+                continue;
+                ERROR_HELPER(-1, "Cannot write to the socket");
+            }
+    
+            // receive confermation from DR
+            while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
+                if (errno == EINTR) continue;
+                ERROR_HELPER(-1, "Cannot read from DR");
+            }
+    
+            buf[msg_len] = '\0';
+            
+            drList[i]=atoi(tmp);
+            
+            i++;
+		}
+		ret = close(socket_desc);
+		ERROR_HELPER(ret, "Cannot close socket");
+	
+    }
+    
+    int n=0;
+    for(n;n<i;n++){
+        strcat(s,itoa(drList[n]));
+        strcat(s," ");
+        strcat(s, itoa(n));
+        if(n!=(i-1)){
+            strcat(s,", ");
+        }
+    }
+    
+    *drOnline=n;
+    fclose(f);
     return s;
 }
 
@@ -300,8 +427,6 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
 
 void *connection_handler(void *arg){
     
-    dr** drList;
-    
     clientList=(client**)realloc(clientList, (num_client+1)*sizeof(client*));
     
     struct client* tmpClient =(client*)malloc(sizeof(client));
@@ -351,6 +476,10 @@ void *connection_handler(void *arg){
     printf("client ID = %d\n", client_id);
 
 	if(verify_client(client_id, socket_desc, tmpClient)){
+        
+        dr** drList = (dr**)malloc(sizeof(dr*)*5);
+        char* ipList=getDR(socket_desc, &drList);
+        
         // echo loop
         while (1){
             // read message from client
@@ -367,12 +496,35 @@ void *connection_handler(void *arg){
 
             // if I receive GetDR command
             if(strncmp (buf, "GetDR",5 )==0){
-                char* ipList=getDR(socket_desc);
+                char* ipList=getDR(socket_desc, &drList);
                 sprintf(buf,"%s",ipList);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+            }
+            
+            // if I receive Put command
+            else if(strncmp (buf, "Put",3 )==0){
+                char** query=str_split(buf,' ');
+                char* name=query[1];
+                int size=atoi(query[2]);
+                
+                int* drOnline=(int*)malloc(sizeof(int));
+                
+                char* putRet=Put(socket_desc, tmpClient->key, size, drOnline);
+                sprintf(buf,"%s",putRet);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                
+                int sizeBlock = size / (*drOnline);
+                int i=0;
+                for (i;i<(*drOnline);i++){
+                    drList[i]->mem = drList[i]->mem - sizeBlock;
                 }
             }
 
