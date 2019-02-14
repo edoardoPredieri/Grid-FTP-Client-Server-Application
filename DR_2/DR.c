@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
 #include <arpa/inet.h>  // htons()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h>
@@ -15,6 +16,49 @@ typedef struct handler_args_s{
     int socket_desc;
     struct sockaddr_in *client_addr;
 } handler_args_t;
+
+// split command
+char** str_split(char* a_str, const char a_delim){
+    char** result    = 0;
+    size_t count     = 0;
+    char* tmp        = a_str;
+    char* last_comma = 0;
+    char delim[2];
+    delim[0] = a_delim;
+    delim[1] = 0;
+
+    // count how many elements will be extracted
+    while (*tmp){
+        if (a_delim == *tmp){
+            count++;
+            last_comma = tmp;
+        }
+        tmp++;
+    }
+
+    // Add space for trailing token
+    count += last_comma < (a_str + strlen(a_str) - 1);
+
+    // Add space for terminating null string so caller knows where the list of returned strings ends
+    count++;
+
+    result = malloc(sizeof(char*) * count);
+
+    if (result){
+        size_t idx  = 0;
+        char* token = strtok(a_str, delim);
+
+        while (token){
+            assert(idx < count);
+            *(result + idx++) = strdup(token);
+            token = strtok(0, delim);
+        }
+        assert(idx == count - 1);
+        *(result + idx) = 0;
+    }
+
+    return result;
+}
 
 void *connection_handler(void *arg){
     handler_args_t *args = (handler_args_t *)arg;
@@ -36,17 +80,6 @@ void *connection_handler(void *arg){
     inet_ntop(AF_INET, &(client_addr->sin_addr), client_ip, INET_ADDRSTRLEN);
     uint16_t client_port = ntohs(client_addr->sin_port); // port number is an unsigned short
 
-    // send welcome message
-    sprintf(buf, "Hi! I'm an echo server. You are %s talking on port %hu.\nI will send you back whatever"
-                 " you send me. I will stop if you send me %s :-)\n",
-            client_ip, client_port, quit_command);
-    msg_len = strlen(buf);
-    while ((ret = send(socket_desc, buf, msg_len, 0)) < 0){
-        if (errno == EINTR)
-            continue;
-        ERROR_HELPER(-1, "Cannot write to the socket");
-    }
-
     // echo loop
     while (1){
         // read message from client
@@ -61,11 +94,32 @@ void *connection_handler(void *arg){
         if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
             break;
 
-        // ... or if I have to send the message back
-        while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
-            if (errno == EINTR)
-                continue;
-            ERROR_HELPER(-1, "Cannot write to the socket");
+        // if I receive Save command
+        if(strncmp (buf, "Save",4 )==0){
+                char** query=str_split(buf,' ');
+                char* key=query[1];
+                
+                printf("ok\n");//da aggiungere salvataggio kiave !!!!
+                
+                sprintf(buf, "OK");
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                    continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                
+                break;
+        }
+
+
+        else{
+            // ... or if I have to send the message back
+            while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                ERROR_HELPER(-1, "Cannot write to the socket");
+            }
         }
     }
 
