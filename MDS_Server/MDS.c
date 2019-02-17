@@ -52,6 +52,16 @@ void printDR(dr* l){
 	printDR(l->next);
 }
 
+int onlineDR(dr*l){
+    if (l==NULL){
+        return 0;
+    }
+    if (l->online==0){
+        return 0 + onlineDR(l->next);
+    }
+    return 1 + onlineDR(l->next);
+}
+
 // insert elem in tail FILE
 file* insTailFILE(file* l, char* name, int size){
     file* tmp = l;
@@ -67,7 +77,7 @@ file* insTailFILE(file* l, char* name, int size){
     return l;
 }
 
-// insert elem in tail 
+// insert elem in tail
 dr* insTail(dr* l, int pos, int port, int mem, int online){
     dr* tmp = l;
 
@@ -139,27 +149,27 @@ dr* init(){
 	FILE* f = fopen(pathD, "r");
     int i=0;
     int j=0;
-    
+
 	dr* drList=(dr*)malloc(sizeof(dr*));
 	drList->next=NULL;
-    
+
 	while(1){
         char* tmp=(char*)calloc(0,sizeof(char)*3);
 
         if(fscanf(f,"%s",tmp)==EOF){
             break;
         }
-        
+
         int pos=i;
         int port=atoi(tmp);
         int online;
         int mem=10;
-        
+
         int ret;
 
 		// variables for handling a socket
 		int socket_desc;
-		struct sockaddr_in server_addr = {0}; 
+		struct sockaddr_in server_addr = {0};
 
 		// create a socket
 		socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -175,13 +185,13 @@ dr* init(){
 		if(ret==-1){
             online=0;
 		}
-		
-		else {	
+
+		else {
 			online=1;
 			ret = close(socket_desc);
 			ERROR_HELPER(ret, "Cannot close socket");
 		}
-		
+
 		drList=insTail(drList, pos, port, mem, online);
 		free(tmp);
     }
@@ -191,14 +201,14 @@ dr* init(){
 
 dr* check(dr** drList){
 	dr* tmp=*drList;
-	
+
 	while(tmp!=NULL){
 		int ret;
 		int online;
-		
+
 		// variables for handling a socket
 		int socket_desc;
-		struct sockaddr_in server_addr = {0}; 
+		struct sockaddr_in server_addr = {0};
 
 		// create a socket
 		socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -214,7 +224,7 @@ dr* check(dr** drList){
 		if(ret==-1){
             online=0;
 		}
-		else {	
+		else {
 			online=1;
 			ret = close(socket_desc);
 			ERROR_HELPER(ret, "Cannot close socket");
@@ -225,12 +235,12 @@ dr* check(dr** drList){
 	return *drList;
 }
 
-char* getDR(dr** drList){	
+char* getDR(dr** drList){
     *drList=check(drList);
-    
+
     char* s=(char*)calloc(0, sizeof(char)*1024);
     dr* tmp=*drList;
-    
+
     while(tmp!=NULL){
 		if(tmp->online){
 			strcat(s, itoa(tmp->port));
@@ -241,32 +251,37 @@ char* getDR(dr** drList){
     return s;
 }
 
-void Put(int socket_desc, char* k, dr** drList,int size){
+void Put(int socket_desc, char* k, dr** drList,int size){   // ritornare vettore di interi l
 
 	char buf[1024];
     size_t buf_len = sizeof(buf);
     size_t msg_len;
-	
-    int sizeBlock = size / 2;	//DA FARE
-	
-	int* l=(int*)calloc(0,sizeof(int)*1024);
+
+
+    int sizeBlock = size / onlineDR(*drList);
+    int rest=size%onlineDR(*drList);
+
+	int* l=(int*)malloc(sizeof(int)*size);
     dr* tmp=check(drList);
-    
+
     int ret;
-      
+
     int i=0;
     int j=0;
     while(tmp->next!=NULL){
-		if(tmp->mem - sizeBlock > 0){
-			
+
+		if(tmp->mem - sizeBlock -rest > 0){
 			if(tmp->online){
 				for(i;i<sizeBlock+j;i++){
 					l[i]=tmp->port;
 				}
+                l[i]=tmp->port;
+                i++;
 				j=i;
-				tmp->mem = tmp->mem - sizeBlock;
+				tmp->mem = tmp->mem - sizeBlock- rest;
+                rest--;
 			}
-		}	
+		}
 		else{
 			sprintf(buf,"MEMORY FULL\n");
 			while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -278,13 +293,12 @@ void Put(int socket_desc, char* k, dr** drList,int size){
 			return;
 		}
 		tmp=tmp->next;
-    } 
-    
-    
-	i=0;
+    }
+
 	int first=0;
-	char* s =(char*)calloc(0,sizeof(char)*1024);
-	for (i;i<size;i++){
+	char* s=(char*)calloc(0,sizeof(char)*100);
+
+	for (i=0;i<size;i++){
 		if(l[i] != first){
 			if(i!=0){
 				strcat(s, itoa(i-1));
@@ -300,30 +314,30 @@ void Put(int socket_desc, char* k, dr** drList,int size){
 		}
 	}
 	strcat(s, itoa(i));
-		
+
     sprintf(buf,"%s",s);
 	while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
 		if (errno == EINTR)
 			continue;
             ERROR_HELPER(-1, "Cannot write to the socket");
 	}
-	
-    free(l),
+
+    free(l);
     free(s);
     return ;
 }
 
 // create a random string
 char* randstring(size_t length) {
-    static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-#'?!";        
+    static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-#'?!";
     char *randomString = NULL;
 
     if (length) {
         randomString = malloc(sizeof(char) * (length +1));
 
-        if (randomString) {   
-            int n;         
-            for (n = 0;n < length;n++) {            
+        if (randomString) {
+            int n;
+            for (n = 0;n < length;n++) {
                 int key = rand() % (int)(sizeof(charset) -1);
                 randomString[n] = charset[key];
             }
@@ -338,50 +352,50 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
     FILE* f = fopen(pathL, "r");
     int ret;
     char* key = randstring(8);
-    
+
     tmpClient->id=id;
     tmpClient->key=key;
-    
+
     while(1){
         char* tmp=malloc(sizeof(char)*3);
 
         if(fscanf(f,"%s",tmp)==EOF){
             break;
         }
-        
+
         // verify if the client is already registered
         if(atoi(tmp)==id){
-            
+
                 char* passw = malloc(sizeof(char)*20);
                 fscanf(f,"%s",passw);
-                
+
                 // send login request to client
                 char buf[1024];
                 size_t buf_len = sizeof(buf);
                 size_t msg_len;
-                
+
                 sprintf(buf, "Welcome Client n:%d, to login type: Auth <Userid> <Password>\n", id);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                     if (errno == EINTR)
                         continue;
                 ERROR_HELPER(-1, "Cannot write to the socket (password request)");
                 }
-                
+
                 // receive password from client
                 while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
                     if (errno == EINTR) continue;
                         ERROR_HELPER(-1, "Cannot read Password from Client");
                 }
-                
+
                 buf[msg_len] = '\0';
-                
+
                 // forge the Auth query
                 char* query =(char*) malloc(sizeof(char)*5000);
                 strcat(query,"Auth ");
                 strcat(query,tmp);
                 strcat(query," ");
                 strcat(query,passw);
-                
+
                 // compare the quety with login
                 if (strcmp(query, buf)==0){
                     sprintf(buf,"%s", key);
@@ -390,13 +404,13 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                             continue;
                         ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
                     }
-                    
+
                     free(query);
                     free(tmp);
                     fclose(f);
                     return 1;
                 }
-                
+
                 else{
                     sprintf(buf, "NOK you can retry again\n");
                     while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -404,21 +418,21 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                             continue;
                         ERROR_HELPER(-1, "Cannot write to the socket (wrong password)");
                     }
-                    
+
                     // receive password from client 2th
                     while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
                         if (errno == EINTR) continue;
                         ERROR_HELPER(-1, "Cannot read Password from Client");
                     }
-                
+
                     buf[msg_len] = '\0';
-        
+
                     char* query =(char*) malloc(sizeof(char)*5000);
                     strcat(query,"Auth ");
                     strcat(query,tmp);
                     strcat(query," ");
                     strcat(query,passw);
-                
+
                     if (strcmp(query, buf)==0){
                         sprintf(buf,"%s", key);
                         while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -431,7 +445,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                         fclose(f);
                         return 1;
                     }
-                
+
                     else{
                         sprintf(buf, "NOK, Bye\n");
                         while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -442,68 +456,68 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                         free(query);
                         free(tmp);
                         fclose(f);
-                        
+
                         return 0;
                     }
                 }
         }
         free(tmp);
     }
-    
+
     fclose(f);
-    
+
     f = fopen(pathL, "a");
-    
+
     // send register request to client
     char buf[1024];
     size_t buf_len = sizeof(buf);
     size_t msg_len;
-               
+
     sprintf(buf, "Welcome Client n:%d, to register type: Auth <Userid> <Password>\n", id);
     while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
         if (errno == EINTR)
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
     }
-        
+
     // receive password from client 2th
     while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
             if (errno == EINTR) continue;
             ERROR_HELPER(-1, "Cannot read Password from Client");
     }
-        
+
     buf[msg_len] = '\0';
-        
+
     char* query =(char*) malloc(sizeof(char)*5000);
     strcat(query,"id");
     strcat(query," ");
     strcat(query,buf);
-                
+
     // write on file
     fprintf(f,"%s",query);
-    
+
     sprintf(buf, "OK\n");
     while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
         if (errno == EINTR)
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
     }
-    
+
     fclose(f);
     free(query);
 	return 1;
 }
 
 void *connection_handler(void *arg){
-    
+
     clientList=(client**)realloc(clientList, (num_client+1)*sizeof(client*));
-    
+
     struct client* tmpClient =(client*)malloc(sizeof(client));
     tmpClient->pos=num_client;
     clientList[num_client]=tmpClient;
-    
+
     num_client++;
-    
+
     handler_args_t *args = (handler_args_t *)arg;
 
     int socket_desc = args->socket_desc;
@@ -531,28 +545,28 @@ void *connection_handler(void *arg){
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket");
     }
-    
+
     // receive the ID from Client
     while ( (msg_len = recv(socket_desc, buf, buf_len - 1, 0)) < 0 ) {
         if (errno == EINTR) continue;
         ERROR_HELPER(-1, "Cannot read ID from Client");
     }
-    
+
     buf[msg_len] = '\0';
-    
+
     // save and verify Client ID
     int client_id = atoi(buf);
     printf("client ID = %d\n", client_id);
 
 	if(verify_client(client_id, socket_desc, tmpClient)){
-        
+
         dr* drList = init();
         printDR(drList);
-        
+
         file* fileList = (file*)malloc(sizeof(file));
         fileList->next=NULL;
-    
-        
+
+
         // echo loop
         while (1){
             // read message from client
@@ -566,8 +580,6 @@ void *connection_handler(void *arg){
             if (recv_bytes == 0) break;
             if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
                 break;
-                
-            
 
             // if I receive GetDR command
             if(strncmp (buf, "GetDR",5 )==0){
@@ -579,22 +591,21 @@ void *connection_handler(void *arg){
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
             }
-            
+
             // if I receive Put command
             else if(strncmp (buf, "Put",3 )==0){
-				
+
 				char buf2[1024];
 				strncpy(buf2, buf, recv_bytes);
-				
+
                 char** query=str_split(buf2,' ');
                 char* name=query[1];
                 int size=atoi(query[2]);
-                
-                
+
                 fileList=insTailFILE(fileList, name, size);
-                  
-                Put(socket_desc, tmpClient->key, &drList, size);
-                
+
+                Put(socket_desc, tmpClient->key, &drList, size);    // salvare il return di Put (l) nella struct file
+
 				printDR(drList);
 
                 free(query);
@@ -630,9 +641,9 @@ void *connection_handler(void *arg){
 }
 
 int main(int argc, char *argv[]){
-	    
+
     clientList = (client**)malloc(sizeof(client*)*num_client);
-    
+
     int ret;
 
     int socket_desc, client_desc;
@@ -684,7 +695,7 @@ int main(int argc, char *argv[]){
         handler_args_t *thread_args = malloc(sizeof(handler_args_t));
         thread_args->socket_desc = client_desc;
         thread_args->client_addr = client_addr;
-        
+
         ret = pthread_create(&thread, NULL, connection_handler, (void *)thread_args);
         PTHREAD_ERROR_HELPER(ret, "Could not create a new thread");
 
