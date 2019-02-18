@@ -12,6 +12,9 @@
 
 #include "common.h"
 
+char* path="keys.txt";
+int keySize=8;
+
 typedef struct handler_args_s{
     int socket_desc;
     struct sockaddr_in *client_addr;
@@ -60,6 +63,27 @@ char** str_split(char* a_str, const char a_delim){
     return result;
 }
 
+void verifyKey(char* k){
+	int in=0;
+	FILE* f = fopen(path, "r");
+	while(1){
+        char* tmp=malloc(sizeof(char)*keySize);
+
+        if(fscanf(f,"%s",tmp)==EOF){
+            break;
+        }
+        if(strcmp(tmp,k)==0){
+			in=1;
+		}
+	}
+	fclose(f);
+	if(in==0){
+		f=fopen(path, "a");
+		fprintf(f,"%s",k);
+		fclose(f);
+	}
+}
+
 void *connection_handler(void *arg){
     handler_args_t *args = (handler_args_t *)arg;
 
@@ -99,7 +123,7 @@ void *connection_handler(void *arg){
                 char** query=str_split(buf,' ');
                 char* key=query[1];
                 
-                printf("ok\n");//da aggiungere salvataggio kiave !!!!
+                verifyKey(key);
                 
                 sprintf(buf, "OK");
                 msg_len = strlen(buf);
@@ -108,7 +132,6 @@ void *connection_handler(void *arg){
                     continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
-                
                 break;
         }
 
