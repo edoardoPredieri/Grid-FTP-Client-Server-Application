@@ -261,7 +261,7 @@ void Put(int socket_desc, char* k, dr** drList,int size){   // ritornare vettore
     int sizeBlock = size / onlineDR(*drList);
     int rest=size%onlineDR(*drList);
 
-	int* l=(int*)malloc(sizeof(int)*size);
+	int* l=(int*)malloc(sizeof(int)*(size+rest));
     dr* tmp=check(drList);
 
     int ret;
@@ -269,17 +269,18 @@ void Put(int socket_desc, char* k, dr** drList,int size){   // ritornare vettore
     int i=0;
     int j=0;
     while(tmp->next!=NULL){
-
 		if(tmp->mem - sizeBlock -rest > 0){
 			if(tmp->online){
 				for(i;i<sizeBlock+j;i++){
 					l[i]=tmp->port;
 				}
-                l[i]=tmp->port;
-                i++;
+				if(rest > 0){
+					l[i]=tmp->port;
+					i++;
+				}
 				j=i;
 				tmp->mem = tmp->mem - sizeBlock- rest;
-                rest--;
+				rest--;
 			}
 		}
 		else{
@@ -313,7 +314,7 @@ void Put(int socket_desc, char* k, dr** drList,int size){   // ritornare vettore
 		first=l[i];
 		}
 	}
-	strcat(s, itoa(i));
+	strcat(s, itoa(i-1));
 
     sprintf(buf,"%s",s);
 	while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
