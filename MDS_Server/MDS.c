@@ -50,14 +50,14 @@ void sendKey(dr* l, char* k){
 	if(l==NULL){
 		return;
 	}
-	
+
 	if(l->online){
 		int ret;
-	
+
 		char buf[1024];
 		size_t buf_len = sizeof(buf);
 		size_t msg_len;
-	
+
 		// variables for handling a socket
 		int socket_desc;
 		struct sockaddr_in server_addr = {0};
@@ -84,7 +84,7 @@ void sendKey(dr* l, char* k){
 					continue;
 					ERROR_HELPER(-1, "Cannot write to the socket");
 			}
-		
+
 			while ((ret = recv(socket_desc, buf, buf_len, 0)) < 0){
 				if (errno == EINTR)
 					continue;
@@ -300,7 +300,7 @@ dr* check(dr** drList){
 
 char* getDR(dr** drList){
     *drList=check(drList);
-    
+
     int online=onlineDR(*drList);
     char* s=(char*)malloc(sizeof(char)*5*online);
     int i=0;
@@ -308,7 +308,7 @@ char* getDR(dr** drList){
 		s[i]=0;
 	}
     dr* tmp=*drList;
-    
+
     while(tmp!=NULL){
 		if(tmp->online){
 			strcat(s, itoa(tmp->port));
@@ -329,7 +329,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 
 	int* l=(int*)malloc(sizeof(int)*(size+rest));
     dr* tmp=check(drList);
-    
+
     sendKey(*drList, k);
 
     int ret;
@@ -371,7 +371,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 
 	int first=0;
 	char* s=(char*)malloc(sizeof(char)*100);
-	
+
     for(i=0;i<100;i++){
 		s[i]=0;
 	}
@@ -408,9 +408,9 @@ char* Get(file* fileList, char* name){
 	file* tmp =fileList;
 	char* s;
 	tmp=tmp->next;
-	
+
 	printFile(tmp);
-	
+
 	while(tmp!=NULL){
 		if(strcmp (tmp->name, name)==0){
 			int size=tmp->size;
@@ -712,7 +712,7 @@ void *connection_handler(void *arg){
 
                 free(query);
             }
-            
+
             // if I receive Get command
             else if(strncmp (buf, "Get",3 )==0){
 
@@ -721,7 +721,7 @@ void *connection_handler(void *arg){
 
                 char** query=str_split(buf2,' ');
                 char* name=query[1];
-                   
+
                 char* s=Get(fileList, name);
                 sprintf(buf,"%s",s);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -729,7 +729,6 @@ void *connection_handler(void *arg){
                     continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
-                free(s);
                 free(query);
 			}
 
