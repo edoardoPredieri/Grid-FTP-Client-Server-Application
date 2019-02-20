@@ -11,6 +11,20 @@
 
 int ID = 001;
 
+int getFlag(char* buf){
+	int ret=0;
+	
+	if(strncmp (buf, "GetDR",5 )==0){
+		ret=1;
+	}
+	else if(strncmp (buf, "Put",3 )==0){
+		ret=2;
+	}
+	else if(strncmp (buf, "Get",3 )==0){
+		ret=3;
+	}
+	return ret;
+}
 
 int main(int argc, char* argv[]){
     int ret;
@@ -56,6 +70,8 @@ int main(int argc, char* argv[]){
         ERROR_HELPER(-1, "Cannot send ID");
     }
     
+    int flag=0;
+    
     // main loop
     while (1) {
         char* quit_command = SERVER_COMMAND;
@@ -67,6 +83,8 @@ int main(int argc, char* argv[]){
             fprintf(stderr, "Error while reading from stdin, exiting...\n");
             exit(EXIT_FAILURE);
         }
+        
+        flag=getFlag(buf);
 
         msg_len = strlen(buf);
         buf[--msg_len] = '\0'; // remove '\n' from the end of the message
@@ -86,8 +104,14 @@ int main(int argc, char* argv[]){
             if (errno == EINTR) continue;
             ERROR_HELPER(-1, "Cannot read from socket");
         }
-
+        
         printf("Server response: %s\n", buf); // no need to insert '\0'
+        
+        if(flag==2){
+			printf("Hai scritto una Put\n");
+			flag=0;
+		}
+        
     }
 
 
