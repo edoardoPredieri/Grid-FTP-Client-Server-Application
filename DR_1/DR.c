@@ -122,9 +122,9 @@ void *connection_handler(void *arg){
         if(strncmp (buf, "Save",4 )==0){
                 char** query=str_split(buf,' ');
                 char* key=query[1];
-                
+
                 verifyKey(key);
-                
+
                 sprintf(buf, "OK");
                 msg_len = strlen(buf);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -134,6 +134,73 @@ void *connection_handler(void *arg){
                 }
                 break;
         }
+
+        if(strncmp (buf, "Put",3 )==0){
+
+            char** query=str_split(buf,'$');
+            char* block=query[1];
+            char* name=query[2];
+            char* key=query[3];
+
+            printf("Recevive block=%s name=%s key=%s\n",block,name,key);
+            //---------------------- if key in mykey
+
+            strcat(key,name);
+            FILE* f=fopen(key,"w");
+
+            fputs(block,f);
+
+            fclose(f);
+
+            sprintf(buf, "Block received");
+            msg_len = strlen(buf);
+            while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+            }
+            break;
+        }
+
+        if(strncmp (buf, "Get",3 )==0){
+
+            char** query=str_split(buf,'$');
+            char* name=query[1];
+            char* key=query[2];
+
+            //---------------------- if key in mykey
+
+            strcat(key,name);
+            FILE* f=fopen(key,"r");
+
+            int n=1,j=0;
+            char* fileBuf=(char*)malloc(sizeof(char)*n);
+
+            while(1){
+                if(j>=n){
+                    n=n*2;
+                    fileBuf=(char*)realloc(fileBuf, n*sizeof(char));
+                }
+                char tmp[1];
+                if(fscanf(f,"%c",tmp)==EOF){
+                    break;
+                }
+                fileBuf[j]=tmp[0];
+                j++;
+            }
+
+            fclose(f);
+
+            sprintf(buf, "%s",fileBuf);
+            msg_len = strlen(buf);
+            while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+            }
+            break;
+        }
+
 
 
         else{
@@ -197,9 +264,9 @@ int main(int argc, char *argv[]){
     while (1){
         // accept incoming connection
         client_desc = accept(socket_desc, (struct sockaddr *)client_addr, (socklen_t *)&sockaddr_len);
-        
-        
-        
+
+
+
         if (client_desc == -1 && errno == EINTR)
             continue; // check for interruption by signals
         ERROR_HELPER(client_desc, "Cannot open socket for incoming connection");
