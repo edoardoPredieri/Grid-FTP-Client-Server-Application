@@ -61,7 +61,17 @@ char* getBlock(int DR, char* k, char* n){
     return NULL;
 }
 
-void sendBlock(int DR, char* b, char* k, char* n){
+void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
+
+    char* b=(char*)malloc(sizeof(char)*(stop-start));
+
+    int i=0;
+    int j=start;
+    for(i;i<=(stop-start);i++){
+        b[i]=totFile[j];
+        j++;
+    }
+
     int ret;
 
     char buf[1024];
@@ -105,25 +115,6 @@ void sendBlock(int DR, char* b, char* k, char* n){
         ERROR_HELPER(ret, "Cannot close socket");
     }
 
-}
-
-char** divBuff(char* buf, int size,  int n){
-    int i=0;
-    char** ret=(char**)malloc(sizeof(char*)*n);
-    for(i;i<n;i++){
-        ret[i]=(char*)malloc(sizeof(char)*(size/n));
-    }
-
-    i=1;
-    int j=0;
-    for(i;i<=n;i++){
-        int k=0;
-        for(j;j<(size/n)*i;j++){
-            ret[i-1][k]=buf[j];
-            k++;
-        }
-    }
-    return ret;
 }
 
 // split command
@@ -172,16 +163,9 @@ char** str_split(char* a_str, const char a_delim){
 int getFlag(char* buf, int* s, char** n, int* p){
     int ret=0;
 	if(strncmp (buf, "GetDR",5 )==0){
-        *p=1;
 		ret=1;
 	}
 	else if(strncmp (buf, "Put",3 )==0){
-
-        if(*p==0){
-            printf("Error you must type GetDR before doing Put\n");
-            return 0;
-        }
-
         char** query=str_split(buf,' ');
         char* name=query[1];
         int size=atoi(query[2]);
@@ -189,10 +173,10 @@ int getFlag(char* buf, int* s, char** n, int* p){
         *n=name;
         *s=size;
 		ret=2;
-        *p=2;
+        *p=1;
 	}
 	else if(strncmp (buf, "Get",3 )==0){
-        if(*p!=2){
+        if(*p==0){
             printf("Error you must type Put before doing Get\n");
             return 0;
         }
@@ -296,26 +280,30 @@ int main(int argc, char* argv[]){
 
         printf("Server response: %s\n", buf); // no need to insert '\0'
 
-        if(flag==1){
-			int i=0;
+        if(flag==2){
+            int h=0, i=0;
+            char** query=str_split(buf,',');
 
-            char** query=str_split(buf,' ');
-            onlineDR=(int*)malloc(sizeof(int)*(sizeof(query)/4));
+            int size=sizeof(query)/strlen(query[0]);
+            int* DR=(int*)malloc(sizeof(int)*size);
+            int* start=(int*)malloc(sizeof(int)*size);
+            int* stop=(int*)malloc(sizeof(int)*size);
 
-            for(i;i<(sizeof(query)/4);i++){
-                onlineDR[i]=atoi(query[i]);
+            for(h;h<=size;h++){
+                char** q=str_split(query[h],' ');
+                DR[h]=atoi(q[0]);
+                start[h]=atoi(q[1]);
+                stop[h]=atoi(q[2]);
             }
 
-		}
+            onlineDR=(int*)malloc(sizeof(int)*size);
+            for(h=0;h<=size;h++){
+                onlineDR[h]=DR[h];
+            }
 
-        else if(flag==2 && p){
             FILE* f=fopen(name,"r");
-            int o=0;
-            while(onlineDR[o]!=0){
-                o++;
-            }
 
-            int n=1,j=0, i=0;
+            int n=1,j=0;
             char* fileBuf=(char*)malloc(sizeof(char)*n);
 
             while(1){
@@ -333,13 +321,13 @@ int main(int argc, char* argv[]){
             int s=j;
             fclose(f);
 
-            char** bufList=divBuff(fileBuf, s, o);
-            for(i=0;i<o;i++){
-                sendBlock(onlineDR[i], bufList[i], key, name);
+            for(i=0;i<=size;i++){
+                sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
+
         }
 
-        else if(flag==3 && p==2){
+        else if(flag==3 && p){
             char** query=str_split(buf,' ');
             int i=0;
 
