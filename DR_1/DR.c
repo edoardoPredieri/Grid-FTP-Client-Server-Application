@@ -63,8 +63,7 @@ char** str_split(char* a_str, const char a_delim){
     return result;
 }
 
-void verifyKey(char* k){
-	int in=0;
+int verifyKey(char* k){
 	FILE* f = fopen(path, "r");
 	while(1){
         char* tmp=malloc(sizeof(char)*keySize);
@@ -72,16 +71,13 @@ void verifyKey(char* k){
         if(fscanf(f,"%s",tmp)==EOF){
             break;
         }
-        if(strcmp(tmp,k)==0){
-			in=1;
+        if(atoi(tmp)==atoi(k)){
+            fclose(f);
+			return 1;
 		}
 	}
-	fclose(f);
-	if(in==0){
-		f=fopen(path, "a");
-		fprintf(f,"%s",k);
-		fclose(f);
-	}
+    fclose(f);
+    return 0;
 }
 
 void *connection_handler(void *arg){
@@ -123,7 +119,11 @@ void *connection_handler(void *arg){
                 char** query=str_split(buf,' ');
                 char* key=query[1];
 
-                verifyKey(key);
+                if(!verifyKey(key)){
+                    FILE* f=fopen(path, "a");
+                    fprintf(f,"%s",key);
+                    fclose(f);
+                }
 
                 sprintf(buf, "OK");
                 msg_len = strlen(buf);
@@ -136,34 +136,41 @@ void *connection_handler(void *arg){
         }
 
         if(strncmp (buf, "Put",3 )==0){
-
             char** query=str_split(buf,'$');
             char* block=query[1];
             char* name=query[2];
             char* key=query[3];
 
             printf("Recevive block=%s name=%s key=%s\n",block,name,key);
-            //---------------------- if key in mykey
+            if(verifyKey(key)){
+                strcat(key,name);
 
-            strcat(key,name);
-            FILE* f=fopen(key,"w");
+                FILE* f=fopen(key,"w");
+                fputs(block,f);
+                fclose(f);
 
-            fputs(block,f);
-
-            fclose(f);
-
-            sprintf(buf, "Block received");
-            msg_len = strlen(buf);
-            while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
-                if (errno == EINTR)
-                    continue;
+                sprintf(buf, "Block received");
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                break;
             }
-            break;
+            else{
+                sprintf(buf, "Error: Key not valid");
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                break;
+            }
         }
 
         if(strncmp (buf, "Get",3 )==0){
-
             char** query=str_split(buf,'$');
             char* name=query[1];
             char* key=query[2];

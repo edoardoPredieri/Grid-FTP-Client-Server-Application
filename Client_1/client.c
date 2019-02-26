@@ -62,7 +62,6 @@ char* getBlock(int DR, char* k, char* n){
 }
 
 void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
-
     char* b=(char*)malloc(sizeof(char)*(stop-start));
 
     int i=0;
@@ -95,6 +94,7 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
     ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
     if(ret==-1){
         ERROR_HELPER(ret, "DR offline");
+        return;
     }
     else {
         sprintf(buf,"Put $%s$%s$%s\n",b,n,k);
@@ -114,7 +114,6 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
         ret = close(socket_desc);
         ERROR_HELPER(ret, "Cannot close socket");
     }
-
 }
 
 // split command
@@ -160,7 +159,7 @@ char** str_split(char* a_str, const char a_delim){
     return result;
 }
 
-int getFlag(char* buf, int* s, char** n, int* p){
+int getFlag(char* buf, int* s, char** n){
     int ret=0;
 	if(strncmp (buf, "GetDR",5 )==0){
 		ret=1;
@@ -173,13 +172,8 @@ int getFlag(char* buf, int* s, char** n, int* p){
         *n=name;
         *s=size;
 		ret=2;
-        *p=1;
 	}
 	else if(strncmp (buf, "Get",3 )==0){
-        if(*p==0){
-            printf("Error you must type Put before doing Get\n");
-            return 0;
-        }
         char** query=str_split(buf,' ');
         char* name=query[1];
         *n=name;
@@ -238,7 +232,6 @@ int main(int argc, char* argv[]){
 
     char* key;
     int flag=0;
-    int p=0;
     int* onlineDR;
     int size;
     char* name;
@@ -269,7 +262,7 @@ int main(int argc, char* argv[]){
         if (msg_len == quit_command_len && !memcmp(buf, quit_command, quit_command_len)) break;
 
 
-        flag=getFlag(buf, &size, &name, &p);
+        flag=getFlag(buf, &size, &name);
 
 
         // read message from server
@@ -302,7 +295,6 @@ int main(int argc, char* argv[]){
             }
 
             FILE* f=fopen(name,"r");
-
             int n=1,j=0;
             char* fileBuf=(char*)malloc(sizeof(char)*n);
 
@@ -324,10 +316,9 @@ int main(int argc, char* argv[]){
             for(i=0;i<=size;i++){
                 sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
-
         }
 
-        else if(flag==3 && p){
+        else if(flag==3){
             char** query=str_split(buf,' ');
             int i=0;
 
@@ -341,19 +332,15 @@ int main(int argc, char* argv[]){
                 strcat(bufFin,getBlock(onlineDR[i], key, name));
             }
 
-            FILE* f2=fopen(name,"w");       // change name
-
+            FILE* f2=fopen(name,"w");
             fputs(bufFin,f2);
-
             fclose(f2);
         }
-
 
         else if(flag==4){
             char** query=str_split(buf,' ');
             key=query[1];
         }
-
     }
 
 

@@ -427,31 +427,11 @@ char* Get(file* fileList, char* name){
 	return NULL;
 }
 
-// create a random string
-char* randstring(size_t length) {
-    static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-#'?!";
-    char *randomString = NULL;
-
-    if (length) {
-        randomString = malloc(sizeof(char) * (length +1));
-
-        if (randomString) {
-            int n;
-            for (n = 0;n < length;n++) {
-                int key = rand() % (int)(sizeof(charset) -1);
-                randomString[n] = charset[key];
-            }
-
-            randomString[length] = '\0';
-        }
-    }
-    return randomString;
-}
-
 int verify_client(int id, int socket_desc, struct client* tmpClient){
     FILE* f = fopen(pathL, "r");
     int ret;
-    char* key = randstring(8);
+
+    char* key =itoa(id^12139456);
 
     tmpClient->id=id;
     tmpClient->key=key;
