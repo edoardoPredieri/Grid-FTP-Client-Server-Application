@@ -36,7 +36,7 @@ typedef struct dr {
 typedef struct file {
     char* name;
     int size;
-    int* blocks;
+    char** blocks;
     struct file* next;
 } file;
 
@@ -102,8 +102,10 @@ void printFile(file* l){
 	if(l==NULL)
 		return;
 	int i=0;
-	for(i;i<l->size;i++)
-		printf("name = %s    size:%d   block[%d]=%d\n",l->name, l->size,i, l->blocks[i]);
+	while(l->blocks[i]!=NULL){
+		printf("name = %s    size:%d   block[%d]=%s\n",l->name, l->size,i, l->blocks[i]);
+		i++;
+	}
 	printFile(l->next);
 }
 
@@ -125,7 +127,7 @@ int onlineDR(dr*l){
 }
 
 // insert elem in tail FILE
-file* insTailFILE(file* l, char* name, int size, int** b){
+file* insTailFILE(file* l, char* name, int size, char** b){
     file* tmp = l;
 
     while (tmp->next!=NULL){
@@ -135,7 +137,7 @@ file* insTailFILE(file* l, char* name, int size, int** b){
     tmp=tmp->next;
     tmp->name=name;
     tmp->size=size;
-    tmp->blocks=*b;
+    tmp->blocks=b;
     tmp->next=NULL;
     return l;
 }
@@ -226,7 +228,7 @@ dr* init(){
         int pos=i;
         int port=atoi(tmp);
         int online;
-        int mem=10;
+        int mem=1000;
 
         int ret;
 
@@ -411,14 +413,23 @@ char* Get(file* fileList, char* name){
 
 	printFile(tmp);
 
+	int i=0,j=0;
+
 	while(tmp!=NULL){
 		if(strcmp (tmp->name, name)==0){
-			int size=tmp->size;
-			int i=0;
-			char* s=(char*)calloc(0,sizeof(char)*5);		// 4 is for port (Local) + 1 = " "
-			for(i;i<size;i++){
-				strcat(s,itoa(tmp->blocks[i]));
+			i=0;
+			while(tmp->blocks[i]!=NULL){
+				i++;	
+			}
+			char* s=(char*)malloc(sizeof(char)*(i+1));
+			for(j=0;j<(i+1);j++){
+				s[j]=0;
+			}
+			i=0;
+			while(tmp->blocks[i]!=NULL){
+				strcat(s,tmp->blocks[i]);
 				strcat(s," ");
+				i++;	
 			}
 			return s;
 		}
@@ -646,7 +657,6 @@ void *connection_handler(void *arg){
         file* fileList = (file*)malloc(sizeof(file));
         fileList->next=NULL;
 
-
         // echo loop
         while (1){
             // read message from client
@@ -655,7 +665,7 @@ void *connection_handler(void *arg){
                     continue;
                 ERROR_HELPER(-1, "Cannot read from socket");
             }
-
+            
             // check whether I have just been told to quit...
             if (recv_bytes == 0) break;
             if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
@@ -676,17 +686,16 @@ void *connection_handler(void *arg){
 
             // if I receive Put command
             else if(strncmp (buf, "Put",3 )==0){
-
-				char buf2[1024];
+				char buf2[recv_bytes];
 				strncpy(buf2, buf, recv_bytes);
-
+				
                 char** query=str_split(buf2,' ');
                 char* name=query[1];
                 int size=atoi(query[2]);
-
+               
                 int* l=Put(socket_desc, tmpClient->key, &drList, size);
 
-				fileList=insTailFILE(fileList, name, size, &l);
+				fileList=insTailFILE(fileList, name, size, str_split(getDR(&drList),' '));
 
 				printDR(drList);
 
@@ -695,8 +704,7 @@ void *connection_handler(void *arg){
 
             // if I receive Get command
             else if(strncmp (buf, "Get",3 )==0){
-
-				char buf2[1024];
+				char buf2[recv_bytes];
 				strncpy(buf2, buf, recv_bytes);
 
                 char** query=str_split(buf2,' ');

@@ -66,10 +66,11 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
 
     int i=0;
     int j=start;
-    for(i;i<=(stop-start);i++){
+    for(i=0;i<=(stop-start);i++){
         b[i]=totFile[j];
         j++;
     }
+    b[i]='\0';
 
     int ret;
 
@@ -94,6 +95,7 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
     ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
     if(ret==-1){
         ERROR_HELPER(ret, "DR offline");
+        free(b);
         return;
     }
     else {
@@ -114,6 +116,7 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
         ret = close(socket_desc);
         ERROR_HELPER(ret, "Cannot close socket");
     }
+    free(b);
 }
 
 // split command
@@ -168,7 +171,6 @@ int getFlag(char* buf, int* s, char** n){
         char** query=str_split(buf,' ');
         char* name=query[1];
         int size=atoi(query[2]);
-
         *n=name;
         *s=size;
 		ret=2;
@@ -277,7 +279,7 @@ int main(int argc, char* argv[]){
             int h=0, i=0;
             char** query=str_split(buf,',');
 
-            int size=sizeof(query)/strlen(query[0]);
+            int size=sizeof(query)/sizeof(query[0]);
             int* DR=(int*)malloc(sizeof(int)*size);
             int* start=(int*)malloc(sizeof(int)*size);
             int* stop=(int*)malloc(sizeof(int)*size);
@@ -316,6 +318,7 @@ int main(int argc, char* argv[]){
             for(i=0;i<=size;i++){
                 sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
+            
         }
 
         else if(flag==3){
@@ -323,13 +326,12 @@ int main(int argc, char* argv[]){
             int i=0;
 
             char* bufFin=(char*)malloc(sizeof(char)*sizeof(query)/4);
+            for(i;i<sizeof(query)/4;i++){
+				bufFin[i]=0;
+			}
 
-            int o=0;
-            while(onlineDR[o]!=0){
-                o++;
-            }
-            for(i=0;i<o;i++){
-                strcat(bufFin,getBlock(onlineDR[i], key, name));
+            for(i=0;i<sizeof(query)/4;i++){
+                strcat(bufFin,getBlock(atoi(query[i]), key, name));
             }
 
             FILE* f2=fopen(name,"w");
