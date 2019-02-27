@@ -55,7 +55,7 @@ dr* removeListD(dr* l,int size){
         tmp=tmp->next;
     }
     return l;
-    
+
     //mandare mess DRs
 }
 
@@ -444,7 +444,7 @@ char* Get(file* fileList, char* name){
 		if(strcmp (tmp->name, name)==0){
 			i=0;
 			while(tmp->blocks[i]!=NULL){
-				i++;	
+				i++;
 			}
 			char* s=(char*)malloc(sizeof(char)*(i+1));
 			for(j=0;j<(i+1);j++){
@@ -454,7 +454,7 @@ char* Get(file* fileList, char* name){
 			while(tmp->blocks[i]!=NULL){
 				strcat(s,tmp->blocks[i]);
 				strcat(s," ");
-				i++;	
+				i++;
 			}
 			return s;
 		}
@@ -466,14 +466,14 @@ char* Get(file* fileList, char* name){
 file* RemoveFile(file* fileList, char* name){
 	file* tmp =fileList;
 	tmp=tmp->next;
-	
-	if(strcmp(tmp->name, name)==0){	
-		if(tmp->next!=NULL)	
+
+	if(strcmp(tmp->name, name)==0){
+		if(tmp->next!=NULL)
 			return fileList->next;
 		else
 			return (file*)malloc(sizeof(file));
 	}
-	
+
     while(tmp!=NULL){
         if(strcmp(tmp->next->name, name)==0){
 			if(tmp->next->next!=NULL){
@@ -716,7 +716,7 @@ void *connection_handler(void *arg){
                     continue;
                 ERROR_HELPER(-1, "Cannot read from socket");
             }
-            
+
             // check whether I have just been told to quit...
             if (recv_bytes == 0) break;
             if (recv_bytes == quit_command_len && !memcmp(buf, quit_command, quit_command_len))
@@ -739,11 +739,11 @@ void *connection_handler(void *arg){
             else if(strncmp (buf, "Put",3 )==0){
 				char buf2[recv_bytes];
 				strncpy(buf2, buf, recv_bytes);
-				
+
                 char** query=str_split(buf2,' ');
                 char* name=query[1];
                 int size=atoi(query[2]);
-               
+
                 int* l=Put(socket_desc, tmpClient->key, &drList, size);
 
 				fileList=insTailFILE(fileList, name, size, str_split(getDR(&drList),' '));
@@ -772,17 +772,18 @@ void *connection_handler(void *arg){
 			}
 
 			else if(strncmp (buf, "Remove",6 )==0){
-				char buf2[recv_bytes];
+				char buf2[1024];
 				strncpy(buf2, buf, recv_bytes);
-				
+
 				char** query=str_split(buf2,' ');
                 char* name=query[1];
+
                 int size=getSize(fileList->next,name);
-                
+
                 fileList=RemoveFile(fileList, name);
-                
+
 				drList=removeListD(drList, size/onlineDR(drList));
-	                
+
                 sprintf(buf,"OK");
                 printDR(drList);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
