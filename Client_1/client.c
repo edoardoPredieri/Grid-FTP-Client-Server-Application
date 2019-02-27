@@ -99,7 +99,7 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
         return;
     }
     else {
-        sprintf(buf,"Put $%s$%s$%s\n",b,n,k);
+        sprintf(buf,"Put $%s$%s$%s",b,n,k);
         while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
             if (errno == EINTR)
                 continue;
@@ -318,7 +318,7 @@ int main(int argc, char* argv[]){
             for(i=0;i<=size;i++){
                 sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
-            
+
         }
 
         else if(flag==3){

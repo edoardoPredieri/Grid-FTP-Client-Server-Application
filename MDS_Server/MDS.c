@@ -46,11 +46,54 @@ char* pathD = "dr.txt";
 client** clientList;
 
 
-dr* removeListD(dr* l,int size){
+dr* removeListD(dr* l, int size, char* name, char* k){
 	dr* tmp =l;
     while(tmp!=NULL){
 		if(tmp->online){
 			tmp->mem+=size;
+
+            int ret;
+
+            char buf[1024];
+            size_t buf_len = sizeof(buf);
+            size_t msg_len;
+
+            // variables for handling a socket
+            int socket_desc;
+            struct sockaddr_in server_addr = {0};
+
+            // create a socket
+            socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+            ERROR_HELPER(socket_desc, "Could not create socket");
+
+            // set up parameters for the connection
+            server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDRESS);
+            server_addr.sin_family      = AF_INET;
+            server_addr.sin_port        = htons(tmp->port);
+
+            // initiate a connection on the socket
+            ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
+            if(ret==-1){
+                ERROR_HELPER(ret, "Cannot send the Key");
+            }
+            else {
+                printf("Send Remove msg to DR n: %d\n",tmp->port);
+                sprintf(buf,"Remove %s%s",k,name);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+					ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+
+                while ((ret = recv(socket_desc, buf, buf_len, 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+					ERROR_HELPER(-1, "Cannot read from socket");
+                }
+                printf("DR response %s\n",buf);
+                ret = close(socket_desc);
+                ERROR_HELPER(ret, "Cannot close socket");
+            }
 		}
         tmp=tmp->next;
     }
@@ -716,7 +759,7 @@ void *connection_handler(void *arg){
                     continue;
                 ERROR_HELPER(-1, "Cannot read from socket");
             }
-            
+
             buf[recv_bytes]='\0';
 
             // check whether I have just been told to quit...
@@ -775,7 +818,7 @@ void *connection_handler(void *arg){
 
                 fileList=RemoveFile(fileList, name);
 
-				drList=removeListD(drList, size/onlineDR(drList));
+				drList=removeListD(drList, size/onlineDR(drList), name, tmpClient->key);
 
                 sprintf(buf,"OK");
                 printDR(drList);

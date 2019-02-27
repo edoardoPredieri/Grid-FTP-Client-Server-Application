@@ -103,11 +103,13 @@ void *connection_handler(void *arg){
     // echo loop
     while (1){
         // read message from client
-        while ((recv_bytes = recv(socket_desc, buf, buf_len, 0)) < 0){
+        while ((recv_bytes = recv(socket_desc, buf, buf_len-1, 0)) < 0){
             if (errno == EINTR)
                 continue;
             ERROR_HELPER(-1, "Cannot read from socket");
         }
+
+        buf[recv_bytes]='\0';
 
         // check whether I have just been told to quit...
         if (recv_bytes == 0) break;
@@ -135,11 +137,13 @@ void *connection_handler(void *arg){
                 break;
         }
 
-        if(strncmp (buf, "Put",3 )==0){
+        else if(strncmp (buf, "Put",3 )==0){
             char** query=str_split(buf,'$');
             char* block=query[1];
             char* name=query[2];
             char* key=query[3];
+
+
 
             printf("Recevive block=%s name=%s key=%s\n",block,name,key);
             if(verifyKey(key)){
@@ -170,10 +174,11 @@ void *connection_handler(void *arg){
             }
         }
 
-        if(strncmp (buf, "Get",3 )==0){
+        else if(strncmp (buf, "Get",3 )==0){
             char** query=str_split(buf,'$');
             char* name=query[1];
             char* key=query[2];
+
 
             //---------------------- if key in mykey
 
@@ -208,6 +213,35 @@ void *connection_handler(void *arg){
             break;
         }
 
+        else if(strncmp (buf, "Remove",6 )==0){
+            char** query=str_split(buf,' ');
+            char* name=query[1];
+
+            printf("name=%s\n",name);
+
+            int status=remove(name);
+
+            if(status==0){
+                sprintf(buf, "OK");
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                break;
+            }
+            else{
+                sprintf(buf, "NOK");
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                break;
+            }
+        }
 
 
         else{
