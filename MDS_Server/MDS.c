@@ -711,11 +711,13 @@ void *connection_handler(void *arg){
         // echo loop
         while (1){
             // read message from client
-            while ((recv_bytes = recv(socket_desc, buf, buf_len, 0)) < 0){
+            while ((recv_bytes = recv(socket_desc, buf, buf_len-1, 0)) < 0){
                 if (errno == EINTR)
                     continue;
                 ERROR_HELPER(-1, "Cannot read from socket");
             }
+            
+            buf[recv_bytes]='\0';
 
             // check whether I have just been told to quit...
             if (recv_bytes == 0) break;
@@ -737,10 +739,7 @@ void *connection_handler(void *arg){
 
             // if I receive Put command
             else if(strncmp (buf, "Put",3 )==0){
-				char buf2[recv_bytes];
-				strncpy(buf2, buf, recv_bytes);
-
-                char** query=str_split(buf2,' ');
+                char** query=str_split(buf,' ');
                 char* name=query[1];
                 int size=atoi(query[2]);
 
@@ -755,10 +754,7 @@ void *connection_handler(void *arg){
 
             // if I receive Get command
             else if(strncmp (buf, "Get",3 )==0){
-				char buf2[recv_bytes];
-				strncpy(buf2, buf, recv_bytes);
-
-                char** query=str_split(buf2,' ');
+                char** query=str_split(buf,' ');
                 char* name=query[1];
 
                 char* s=Get(fileList, name);
@@ -772,10 +768,7 @@ void *connection_handler(void *arg){
 			}
 
 			else if(strncmp (buf, "Remove",6 )==0){
-				char buf2[1024];
-				strncpy(buf2, buf, recv_bytes);
-
-				char** query=str_split(buf2,' ');
+				char** query=str_split(buf,' ');
                 char* name=query[1];
 
                 int size=getSize(fileList->next,name);
