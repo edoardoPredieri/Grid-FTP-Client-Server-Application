@@ -45,6 +45,31 @@ char* pathL = "login.txt";
 char* pathD = "dr.txt";
 client** clientList;
 
+
+dr* removeListD(dr* l,int size){
+	dr* tmp =l;
+    while(tmp!=NULL){
+		if(tmp->online){
+			tmp->mem+=size;
+		}
+        tmp=tmp->next;
+    }
+    return l;
+    
+    //mandare mess DRs
+}
+
+int getSize(file* l, char* n){
+	file* tmp =l;
+    while(tmp!=NULL){
+        if(strcmp(tmp->name, n)==0){
+            return tmp->size;
+        }
+        tmp=tmp->next;
+    }
+    return 0;
+}
+
 // send key of client to DRs
 void sendKey(dr* l, char* k){
 	if(l==NULL){
@@ -438,6 +463,32 @@ char* Get(file* fileList, char* name){
 	return NULL;
 }
 
+file* RemoveFile(file* fileList, char* name){
+	file* tmp =fileList;
+	tmp=tmp->next;
+	
+	if(strcmp(tmp->name, name)==0){	
+		if(tmp->next!=NULL)	
+			return fileList->next;
+		else
+			return (file*)malloc(sizeof(file));
+	}
+	
+    while(tmp!=NULL){
+        if(strcmp(tmp->next->name, name)==0){
+			if(tmp->next->next!=NULL){
+				tmp->next=tmp->next->next;
+			}
+			else{
+				tmp->next=NULL;
+			}
+            break;
+        }
+        tmp=tmp->next;
+    }
+	return fileList;
+}
+
 int verify_client(int id, int socket_desc, struct client* tmpClient){
     FILE* f = fopen(pathL, "r");
     int ret;
@@ -712,6 +763,28 @@ void *connection_handler(void *arg){
 
                 char* s=Get(fileList, name);
                 sprintf(buf,"%s",s);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                if (errno == EINTR)
+                    continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                free(query);
+			}
+
+			else if(strncmp (buf, "Remove",6 )==0){
+				char buf2[recv_bytes];
+				strncpy(buf2, buf, recv_bytes);
+				
+				char** query=str_split(buf2,' ');
+                char* name=query[1];
+                int size=getSize(fileList->next,name);
+                
+                fileList=RemoveFile(fileList, name);
+                
+				drList=removeListD(drList, size/onlineDR(drList));
+	                
+                sprintf(buf,"OK");
+                printDR(drList);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
