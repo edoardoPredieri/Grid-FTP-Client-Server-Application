@@ -135,6 +135,8 @@ void *connection_handler(void *arg){
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
                 break;
+
+                //free(query);
         }
 
         else if(strncmp (buf, "Put",3 )==0){
@@ -142,8 +144,6 @@ void *connection_handler(void *arg){
             char* block=query[1];
             char* name=query[2];
             char* key=query[3];
-
-
 
             printf("Recevive block=%s name=%s key=%s\n",block,name,key);
             if(verifyKey(key)){
@@ -175,14 +175,15 @@ void *connection_handler(void *arg){
         }
 
         else if(strncmp (buf, "Get",3 )==0){
+
             char** query=str_split(buf,'$');
             char* name=query[1];
             char* key=query[2];
 
-
             //---------------------- if key in mykey
 
-            strcat(key,name);
+            key=strcat(key,name);
+
             FILE* f=fopen(key,"r");
 
             int n=1,j=0;
@@ -197,6 +198,7 @@ void *connection_handler(void *arg){
                 if(fscanf(f,"%c",tmp)==EOF){
                     break;
                 }
+
                 fileBuf[j]=tmp[0];
                 j++;
             }

@@ -13,6 +13,7 @@
 int ID = 001;
 
 char* getBlock(int DR, char* k, char* n){
+
     int ret;
 
     char buf[1024];
@@ -38,7 +39,7 @@ char* getBlock(int DR, char* k, char* n){
         ERROR_HELPER(ret, "DR offline");
     }
     else {
-        sprintf(buf,"Get $%s$%s\n",n,k);
+        sprintf(buf,"Get $%s$%s",n,k);
         while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
             if (errno == EINTR)
                 continue;
@@ -273,6 +274,8 @@ int main(int argc, char* argv[]){
             ERROR_HELPER(-1, "Cannot read from socket");
         }
 
+        //buf[msg_len] = '\0';
+
         printf("Server response: %s\n", buf); // no need to insert '\0'
 
         if(flag==2){
@@ -318,7 +321,6 @@ int main(int argc, char* argv[]){
             for(i=0;i<=size;i++){
                 sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
-
         }
 
         else if(flag==3){
