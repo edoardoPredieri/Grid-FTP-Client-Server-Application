@@ -12,7 +12,19 @@
 
 int ID = 001;
 
-char* getBlock(int DR, char* k, char* n){
+char* getBlock(int DR, char* k, char* n, int size, int sizeq, int id){
+
+    int rest=size%sizeq;
+    int sizeTmp=(int) size/sizeq;
+    int sizeFin=0;
+
+    if((id+1) <= rest){
+        sizeFin=sizeTmp+1;
+    }
+
+    else{
+        sizeFin=sizeTmp;
+    }
 
     int ret;
 
@@ -56,7 +68,8 @@ char* getBlock(int DR, char* k, char* n){
         ERROR_HELPER(ret, "Cannot close socket");
 
         char* sret=(char*)malloc(sizeof(char)*sizeof(buf));
-        sprintf(sret,"%s",buf);
+        sret=strncpy(sret, buf, sizeFin);
+
         return sret;
     }
     return NULL;
@@ -120,8 +133,58 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
     free(b);
 }
 
+int saveSize(char* name, int size){
+
+    FILE* f = fopen("fileSize.txt", "r");
+
+    while(1){
+        char* tmp=malloc(sizeof(char)*20);
+
+        if(fscanf(f,"%s",tmp)==EOF){
+            break;
+        }
+        if(strncmp (tmp, name, strlen(name))==0){
+            fclose(f);
+            free(tmp);
+            return 1;
+        }
+
+    }
+    fclose(f);
+
+    f = fopen("fileSize.txt", "a");
+
+    fprintf(f,"%s ",name);
+    fprintf(f,"%d\n",size);
+    fclose(f);
+
+    return 1;
+}
+
+int getSize(char* n){
+    FILE* f = fopen("fileSize.txt", "r");
+
+    while(1){
+        char* tmp=malloc(sizeof(char)*20);
+
+        if(fscanf(f,"%s",tmp)==EOF){
+            break;
+        }
+        if(strncmp (tmp, n, strlen(n))==0){
+            int tmpI;
+            fscanf(f,"%d",&tmpI);
+            fclose(f);
+            free(tmp);
+            return tmpI;
+        }
+
+    }
+    fclose(f);
+    return 0;
+}
+
 // split command
-char** str_split(char* a_str, const char a_delim){
+char** str_split(char* a_str, const char a_delim, int* size){
     char** result    = 0;
     size_t count     = 0;
     char* tmp        = a_str;
@@ -138,6 +201,8 @@ char** str_split(char* a_str, const char a_delim){
         }
         tmp++;
     }
+
+    *size=count;
 
     // Add space for trailing token
     count += last_comma < (a_str + strlen(a_str) - 1);
@@ -165,19 +230,27 @@ char** str_split(char* a_str, const char a_delim){
 
 int getFlag(char* buf, int* s, char** n){
     int ret=0;
+    int* sizeq=(int*)malloc(sizeof(int));
+
 	if(strncmp (buf, "GetDR",5 )==0){
 		ret=1;
 	}
 	else if(strncmp (buf, "Put",3 )==0){
-        char** query=str_split(buf,' ');
+        char** query=str_split(buf,' ',sizeq);
         char* name=query[1];
         int size=atoi(query[2]);
+
+        if(!saveSize(name,size)){
+            printf("Error during save size of file\n");
+        }
+
         *n=name;
         *s=size;
 		ret=2;
+
 	}
 	else if(strncmp (buf, "Get",3 )==0){
-        char** query=str_split(buf,' ');
+        char** query=str_split(buf,' ',sizeq);
         char* name=query[1];
         *n=name;
 		ret=3;
@@ -186,6 +259,8 @@ int getFlag(char* buf, int* s, char** n){
     else if(strncmp (buf, "Auth",4 )==0){
 		ret=4;
 	}
+
+    free(sizeq);
 	return ret;
 }
 
@@ -274,28 +349,29 @@ int main(int argc, char* argv[]){
             ERROR_HELPER(-1, "Cannot read from socket");
         }
 
-        //buf[msg_len] = '\0';
-
         printf("Server response: %s\n", buf); // no need to insert '\0'
 
         if(flag==2){
             int h=0, i=0;
-            char** query=str_split(buf,',');
+            int* sizeq=(int*)malloc(sizeof(int));
+            int* sizeq2=(int*)malloc(sizeof(int));
 
-            int size=sizeof(query)/sizeof(query[0]);
-            int* DR=(int*)malloc(sizeof(int)*size);
-            int* start=(int*)malloc(sizeof(int)*size);
-            int* stop=(int*)malloc(sizeof(int)*size);
+            char** query=str_split(buf,',',sizeq);
 
-            for(h;h<=size;h++){
-                char** q=str_split(query[h],' ');
+
+            int* DR=(int*)malloc(sizeof(int)*(*sizeq));
+            int* start=(int*)malloc(sizeof(int)*(*sizeq));
+            int* stop=(int*)malloc(sizeof(int)*(*sizeq));
+
+            for(h;h<=(*sizeq);h++){
+                char** q=str_split(query[h],' ',sizeq2);
                 DR[h]=atoi(q[0]);
                 start[h]=atoi(q[1]);
                 stop[h]=atoi(q[2]);
             }
 
-            onlineDR=(int*)malloc(sizeof(int)*size);
-            for(h=0;h<=size;h++){
+            onlineDR=(int*)malloc(sizeof(int)*(*sizeq));
+            for(h=0;h<=(*sizeq);h++){
                 onlineDR[h]=DR[h];
             }
 
@@ -318,31 +394,45 @@ int main(int argc, char* argv[]){
             int s=j;
             fclose(f);
 
-            for(i=0;i<=size;i++){
+            for(i=0;i<=(*sizeq);i++){
                 sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
+            free(sizeq);
+            free(sizeq2);
         }
 
         else if(flag==3){
-            char** query=str_split(buf,' ');
+
+            size=getSize(name);
+
+            if(size==0){
+                printf("Error during reading size of file\n");
+                break;
+            }
+
+            int* sizeq=(int*)malloc(sizeof(int));
+            char** query=str_split(buf,' ',sizeq);
             int i=0;
 
-            char* bufFin=(char*)malloc(sizeof(char)*sizeof(query)/4);
-            for(i;i<sizeof(query)/4;i++){
+            char* bufFin=(char*)malloc(sizeof(char)*size);
+            for(i;i<size;i++){
 				bufFin[i]=0;
 			}
 
-            for(i=0;i<sizeof(query)/4;i++){
-                strcat(bufFin,getBlock(atoi(query[i]), key, name));
+            for(i=0;i<(*sizeq);i++){
+                strcat(bufFin,getBlock(atoi(query[i]), key, name, size, *sizeq, i));
             }
 
             FILE* f2=fopen(name,"w");
             fputs(bufFin,f2);
             fclose(f2);
+
+            free(sizeq);
         }
 
         else if(flag==4){
-            char** query=str_split(buf,' ');
+            int* sizeq=(int*)malloc(sizeof(int));
+            char** query=str_split(buf,' ',sizeq);
             key=query[1];
         }
     }

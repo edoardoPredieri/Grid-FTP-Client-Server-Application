@@ -9,19 +9,21 @@
 #include <arpa/inet.h>  // htons()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h>
-
-
 #include "common.h"
 
 typedef struct handler_args_s {
     int socket_desc;
     struct sockaddr_in *client_addr;
+    struct client* client_list;
 } handler_args_t;
 
 typedef struct client {
     int pos;
     int id;
     char* key;
+    struct dr* drList;
+    struct file* fileList;
+    struct client* next;
 } client;
 
 typedef struct dr {
@@ -43,63 +45,26 @@ typedef struct file {
 int num_client=0;
 char* pathL = "login.txt";
 char* pathD = "dr.txt";
-client** clientList;
 
 
-dr* removeListD(dr* l, int size, char* name, char* k){
-	dr* tmp =l;
-    while(tmp!=NULL){
-		if(tmp->online){
-			tmp->mem+=size;
 
-            int ret;
 
-            char buf[1024];
-            size_t buf_len = sizeof(buf);
-            size_t msg_len;
+int isListFile(file* f, char* name, int p){
+    file *tmpf=f;
 
-            // variables for handling a socket
-            int socket_desc;
-            struct sockaddr_in server_addr = {0};
+    while(tmpf!=NULL){
 
-            // create a socket
-            socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-            ERROR_HELPER(socket_desc, "Could not create socket");
-
-            // set up parameters for the connection
-            server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDRESS);
-            server_addr.sin_family      = AF_INET;
-            server_addr.sin_port        = htons(tmp->port);
-
-            // initiate a connection on the socket
-            ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
-            if(ret==-1){
-                ERROR_HELPER(ret, "Cannot send the Key");
-            }
-            else {
-                printf("Send Remove msg to DR n: %d\n",tmp->port);
-                sprintf(buf,"Remove %s%s",k,name);
-                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
-                    if (errno == EINTR)
-                        continue;
-					ERROR_HELPER(-1, "Cannot write to the socket");
+        if(strncmp (tmpf->name, name,strlen(name))==0){
+            int i=0;
+            for(i;i<tmpf->size;i++){
+                if(atoi(tmpf->blocks[i]) == p){
+                    return 1;
                 }
-
-                while ((ret = recv(socket_desc, buf, buf_len, 0)) < 0){
-                    if (errno == EINTR)
-                        continue;
-					ERROR_HELPER(-1, "Cannot read from socket");
-                }
-                printf("DR response %s\n",buf);
-                ret = close(socket_desc);
-                ERROR_HELPER(ret, "Cannot close socket");
             }
-		}
-        tmp=tmp->next;
+        }
+        tmpf=tmpf->next;
     }
-    return l;
-
-    //mandare mess DRs
+    return 0;
 }
 
 int getSize(file* l, char* n){
@@ -389,24 +354,40 @@ char* getDR(dr** drList){
     return s;
 }
 
+int isOnline(int p, dr** drList){
+    *drList=check(drList);
+
+    dr* tmp=*drList;
+
+    while(tmp!=NULL){
+        if(tmp->port == p && !tmp->online){
+            return 0;
+        }
+        tmp=tmp->next;
+    }
+    return 1;
+}
+
 int* Put(int socket_desc, char* k, dr** drList,int size){
 	char buf[1024];
     size_t buf_len = sizeof(buf);
     size_t msg_len;
 
-    int sizeBlock = size / onlineDR(*drList);
+    *drList=check(drList);
+
+    int sizeBlock =(int) size / onlineDR(*drList);
     int rest=size%onlineDR(*drList);
 
 	int* l=(int*)malloc(sizeof(int)*(size+rest));
     dr* tmp=check(drList);
 
-    sendKey(*drList, k);
+    sendKey(tmp, k);
 
     int ret;
 
     int i=0;
     int j=0;
-    while(tmp->next!=NULL){
+    while(tmp!=NULL){
 		if(tmp->mem - sizeBlock -rest > 0){
 			if(tmp->online){
 				for(i;i<sizeBlock+j;i++){
@@ -418,7 +399,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 				}
 				j=i;
 				if(rest>0){
-					tmp->mem = tmp->mem - sizeBlock- rest;
+					tmp->mem = tmp->mem - sizeBlock- 1;
 				}
 				else{
 					tmp->mem = tmp->mem - sizeBlock;
@@ -438,6 +419,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 		}
 		tmp=tmp->next;
     }
+
 
 	int first=0;
 	char* s=(char*)malloc(sizeof(char)*100);
@@ -464,6 +446,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 	strcat(s, itoa(i-1));
 
     sprintf(buf,"%s",s);
+    buf[strlen(s)]='\0';
 	while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
 		if (errno == EINTR)
 			continue;
@@ -474,7 +457,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
     return l;
 }
 
-char* Get(file* fileList, char* name){
+char* Get(file* fileList, char* name, dr** drList, int* n){
 	file* tmp =fileList;
 	char* s;
 	tmp=tmp->next;
@@ -495,15 +478,92 @@ char* Get(file* fileList, char* name){
 			}
 			i=0;
 			while(tmp->blocks[i]!=NULL){
+                if(!isOnline(atoi(tmp->blocks[i]), drList)){
+                    free(s);
+                    s=(char*)malloc(sizeof(char)*3);
+                    sprintf(s,"NOK");
+                    return s;
+                }
 				strcat(s,tmp->blocks[i]);
 				strcat(s," ");
 				i++;
 			}
+            *n=i;
 			return s;
 		}
 		tmp=tmp->next;
 	}
 	return NULL;
+}
+
+dr* removeListD(dr* l, int size, char* name, char* k, file* f){
+	dr* tmp =l;
+    int id=0;
+
+    while(tmp!=NULL){
+		if(tmp->online && isListFile(f->next,name,tmp->port)){
+            int n;
+            char* s=Get(f, name, &l, &n);
+
+            int rest=size%n;
+            int sizeTmp=(int) size/n;
+
+
+            if((id+1) <= rest){
+                tmp->mem+=(sizeTmp+1);
+            }
+
+            else{
+                tmp->mem+=sizeTmp;
+            }
+
+            int ret;
+
+            char buf[1024];
+            size_t buf_len = sizeof(buf);
+            size_t msg_len;
+
+            // variables for handling a socket
+            int socket_desc;
+            struct sockaddr_in server_addr = {0};
+
+            // create a socket
+            socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+            ERROR_HELPER(socket_desc, "Could not create socket");
+
+            // set up parameters for the connection
+            server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDRESS);
+            server_addr.sin_family      = AF_INET;
+            server_addr.sin_port        = htons(tmp->port);
+
+            // initiate a connection on the socket
+            ret = connect(socket_desc, (struct sockaddr*) &server_addr, sizeof(struct sockaddr_in));
+            if(ret==-1){
+                ERROR_HELPER(ret, "Cannot send the Key");
+            }
+            else {
+                printf("Send Remove msg to DR n: %d\n",tmp->port);
+                sprintf(buf,"Remove %s%s",k,name);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+					ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+
+                while ((ret = recv(socket_desc, buf, buf_len, 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+					ERROR_HELPER(-1, "Cannot read from socket");
+                }
+                printf("DR response %s\n",buf);
+                ret = close(socket_desc);
+                ERROR_HELPER(ret, "Cannot close socket");
+            }
+		}
+        id++;
+        tmp=tmp->next;
+    }
+    return l;
 }
 
 file* RemoveFile(file* fileList, char* name){
@@ -532,14 +592,40 @@ file* RemoveFile(file* fileList, char* name){
 	return fileList;
 }
 
-int verify_client(int id, int socket_desc, struct client* tmpClient){
+client* insTailCLIENT(client* l, int id, char* key){
+    client* tmp = l;
+
+    while (tmp->next!=NULL){
+        tmp=tmp->next;
+    }
+    tmp->next=(client*)malloc(sizeof(client));
+    tmp=tmp->next;
+    tmp->id=id;
+    tmp->key=key;
+    tmp->drList = init();
+    tmp->fileList = (file*)malloc(sizeof(file));
+    tmp->fileList->next=NULL;
+    tmp->next=NULL;
+    return l;
+}
+
+client* getClient(int id, struct client* client_list){
+    client* tmp = client_list;
+
+    while(tmp!=NULL){
+        if(tmp->id == id){
+            return tmp;
+        }
+        tmp=tmp->next;
+    }
+    return NULL;
+}
+
+int verify_client(int id, int socket_desc, struct client** client_list, struct client** actual_client){
     FILE* f = fopen(pathL, "r");
     int ret;
 
     char* key =itoa(id^12139456);
-
-    tmpClient->id=id;
-    tmpClient->key=key;
 
     while(1){
         char* tmp=malloc(sizeof(char)*3);
@@ -581,7 +667,7 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                 strcat(query," ");
                 strcat(query,passw);
 
-                // compare the quety with login
+                // compare the query with login
                 if (strcmp(query, buf)==0){
                     sprintf(buf,"K %s", key);
                     while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
@@ -589,6 +675,9 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                             continue;
                         ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
                     }
+
+                    *client_list=insTailCLIENT(*client_list,id,key);
+                    *actual_client=getClient(id, *client_list);
 
                     free(query);
                     free(tmp);
@@ -625,6 +714,10 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
                                 continue;
                             ERROR_HELPER(-1, "Cannot write to the socket (correct password)");
                         }
+
+                        *client_list=insTailCLIENT(*client_list,id,key);
+                        *actual_client=getClient(id, *client_list);
+
                         free(query);
                         free(tmp);
                         fclose(f);
@@ -681,12 +774,15 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
     // write on file
     fprintf(f,"%s",query);
 
-    sprintf(buf, "OK\n");
+    sprintf(buf, "%s", key);
     while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
         if (errno == EINTR)
             continue;
         ERROR_HELPER(-1, "Cannot write to the socket (registration request)");
     }
+
+    *client_list=insTailCLIENT(*client_list,id,key);
+    *actual_client=getClient(id, *client_list);
 
     fclose(f);
     free(query);
@@ -695,18 +791,11 @@ int verify_client(int id, int socket_desc, struct client* tmpClient){
 
 void *connection_handler(void *arg){
 
-    clientList=(client**)realloc(clientList, (num_client+1)*sizeof(client*));
-
-    struct client* tmpClient =(client*)malloc(sizeof(client));
-    tmpClient->pos=num_client;
-    clientList[num_client]=tmpClient;
-
-    num_client++;
-
     handler_args_t *args = (handler_args_t *)arg;
 
     int socket_desc = args->socket_desc;
     struct sockaddr_in *client_addr = args->client_addr;
+    struct client* client_list = args->client_list;
 
     int ret, recv_bytes;
 
@@ -743,13 +832,11 @@ void *connection_handler(void *arg){
     int client_id = atoi(buf);
     printf("client ID = %d\n", client_id);
 
-	if(verify_client(client_id, socket_desc, tmpClient)){
+    client* actualClient;
 
-        dr* drList = init();
-        printDR(drList);
+	if(verify_client(client_id, socket_desc, &client_list, &actualClient)){
 
-        file* fileList = (file*)malloc(sizeof(file));
-        fileList->next=NULL;
+        printDR(actualClient->drList);
 
         // echo loop
         while (1){
@@ -769,9 +856,9 @@ void *connection_handler(void *arg){
 
             // if I receive GetDR command
             if(strncmp (buf, "GetDR",5 )==0){
-				char* s=getDR(&drList);
+				char* s=getDR(&actualClient->drList);
                 sprintf(buf,"%s",s);
-                printDR(drList);
+                printDR(actualClient->drList);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
@@ -786,11 +873,11 @@ void *connection_handler(void *arg){
                 char* name=query[1];
                 int size=atoi(query[2]);
 
-                int* l=Put(socket_desc, tmpClient->key, &drList, size);
+                int* l=Put(socket_desc, actualClient->key, &actualClient->drList, size);
 
-				fileList=insTailFILE(fileList, name, size, str_split(getDR(&drList),' '));
+				actualClient->fileList=insTailFILE(actualClient->fileList, name, size, str_split(getDR(&actualClient->drList),' '));
 
-				printDR(drList);
+				printDR(actualClient->drList);
 
                 free(query);
             }
@@ -800,7 +887,9 @@ void *connection_handler(void *arg){
                 char** query=str_split(buf,' ');
                 char* name=query[1];
 
-                char* s=Get(fileList, name);
+                int n;
+
+                char* s=Get(actualClient->fileList, name, &actualClient->drList, &n);
                 sprintf(buf,"%s",s);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
@@ -814,14 +903,14 @@ void *connection_handler(void *arg){
 				char** query=str_split(buf,' ');
                 char* name=query[1];
 
-                int size=getSize(fileList->next,name);
+                int size=getSize(actualClient->fileList->next,name);
 
-                fileList=RemoveFile(fileList, name);
+                actualClient->drList=removeListD(actualClient->drList, size, name, actualClient->key, actualClient->fileList);
 
-				drList=removeListD(drList, size/onlineDR(drList), name, tmpClient->key);
+                actualClient->fileList=RemoveFile(actualClient->fileList, name);
 
                 sprintf(buf,"OK");
-                printDR(drList);
+                printDR(actualClient->drList);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
@@ -847,8 +936,8 @@ void *connection_handler(void *arg){
     if (DEBUG)
         fprintf(stderr, "Thread created to handle the request has completed.\n");
 
-    free(tmpClient);
-    clientList[num_client]=NULL;
+    //free(tmpClient);
+    //clientList[num_client]=NULL;
     num_client--;
 
     free(args->client_addr);
@@ -858,10 +947,10 @@ void *connection_handler(void *arg){
 
 int main(int argc, char *argv[]){
 
-    clientList = (client**)malloc(sizeof(client*)*num_client);
+    //clientList = (client**)malloc(sizeof(client*)*num_client);
+    client* clientList=(client*)malloc(sizeof(client));
 
     int ret;
-
     int socket_desc, client_desc;
 
     // some fields are required to be filled with 0
@@ -911,6 +1000,7 @@ int main(int argc, char *argv[]){
         handler_args_t *thread_args = malloc(sizeof(handler_args_t));
         thread_args->socket_desc = client_desc;
         thread_args->client_addr = client_addr;
+        thread_args->client_list = clientList;
 
         ret = pthread_create(&thread, NULL, connection_handler, (void *)thread_args);
         PTHREAD_ERROR_HELPER(ret, "Could not create a new thread");

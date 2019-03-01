@@ -180,6 +180,8 @@ void *connection_handler(void *arg){
             char* name=query[1];
             char* key=query[2];
 
+            //---------------------- if key in mykey
+
             key=strcat(key,name);
 
             FILE* f=fopen(key,"r");
