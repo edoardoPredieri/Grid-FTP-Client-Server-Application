@@ -9,7 +9,14 @@
 #include <arpa/inet.h>  // htons()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <semaphore.h>
+
 #include "common.h"
+
+sem_t* thread_sem;
+
 
 typedef struct handler_args_s {
     int socket_desc;
@@ -244,6 +251,9 @@ char* itoa(int i){
 
 // controll the online DRs
 dr* init(){
+    int ret = sem_wait(thread_sem);
+	ERROR_HELPER(ret, "Error in sem_wait");
+
 	FILE* f = fopen(pathD, "r");
     int i=0;
     int j=0;
@@ -262,8 +272,6 @@ dr* init(){
         int port=atoi(tmp);
         int online;
         int mem=1000;
-
-        int ret;
 
 		// variables for handling a socket
 		int socket_desc;
@@ -294,14 +302,18 @@ dr* init(){
 		free(tmp);
     }
     fclose(f);
+    ret = sem_post(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_post");
     return drList->next;
 }
 
 dr* check(dr** drList){
 	dr* tmp=*drList;
 
+    int ret = sem_wait(thread_sem);
+	ERROR_HELPER(ret, "Error in sem_wait");
+
 	while(tmp!=NULL){
-		int ret;
 		int online;
 
 		// variables for handling a socket
@@ -330,6 +342,9 @@ dr* check(dr** drList){
 		tmp->online=online;
 		tmp=tmp->next;
 	}
+    ret = sem_post(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_post");
+
 	return *drList;
 }
 
@@ -381,9 +396,13 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 	int* l=(int*)malloc(sizeof(int)*(size+rest));
     dr* tmp=check(drList);
 
+    int ret = sem_wait(thread_sem);
+	ERROR_HELPER(ret, "Error in sem_wait");
     sendKey(tmp, k);
+     ret = sem_post(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_post");
 
-    int ret;
+
 
     int i=0;
     int j=0;
@@ -499,6 +518,7 @@ char* Get(file* fileList, char* name, dr** drList, int* n){
 dr* removeListD(dr* l, int size, char* name, char* k, file* f){
 	dr* tmp =l;
     int id=0;
+    int ret;
 
     while(tmp!=NULL){
 		if(tmp->online && isListFile(f->next,name,tmp->port)){
@@ -517,7 +537,8 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
                 tmp->mem+=sizeTmp;
             }
 
-            int ret;
+            ret = sem_wait(thread_sem);
+            ERROR_HELPER(ret, "Error in sem_wait");
 
             char buf[1024];
             size_t buf_len = sizeof(buf);
@@ -563,6 +584,9 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
         id++;
         tmp=tmp->next;
     }
+
+    ret = sem_post(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_post");
     return l;
 }
 
@@ -622,8 +646,10 @@ client* getClient(int id, struct client* client_list){
 }
 
 int verify_client(int id, int socket_desc, struct client** client_list, struct client** actual_client){
+    int ret = sem_wait(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_wait");
+
     FILE* f = fopen(pathL, "r");
-    int ret;
 
     char* key =itoa(id^12139456);
 
@@ -649,7 +675,7 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                     if (errno == EINTR)
                         continue;
-                ERROR_HELPER(-1, "Cannot write to the socket (password request)");
+                    ERROR_HELPER(-1, "Cannot write to the socket (password request)");
                 }
 
                 // receive password from client
@@ -682,6 +708,8 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                     free(query);
                     free(tmp);
                     fclose(f);
+                    ret = sem_post(thread_sem);
+                    ERROR_HELPER(ret, "Error in sem_post");
                     return 1;
                 }
 
@@ -721,6 +749,8 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                         free(query);
                         free(tmp);
                         fclose(f);
+                        ret = sem_post(thread_sem);
+                        ERROR_HELPER(ret, "Error in sem_post");
                         return 1;
                     }
 
@@ -734,7 +764,8 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                         free(query);
                         free(tmp);
                         fclose(f);
-
+                        ret = sem_post(thread_sem);
+                        ERROR_HELPER(ret, "Error in sem_post");
                         return 0;
                     }
                 }
@@ -786,6 +817,8 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
 
     fclose(f);
     free(query);
+    ret = sem_post(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_post");
 	return 1;
 }
 
@@ -946,12 +979,14 @@ void *connection_handler(void *arg){
 }
 
 int main(int argc, char *argv[]){
-
-    //clientList = (client**)malloc(sizeof(client*)*num_client);
     client* clientList=(client*)malloc(sizeof(client));
+    thread_sem=(sem_t*)malloc(sizeof(sem_t));
 
     int ret;
     int socket_desc, client_desc;
+
+    ret = sem_init(thread_sem, 1, 5);   //5=maxDR
+	ERROR_HELPER(ret, "Error in initialization of thread_sem");
 
     // some fields are required to be filled with 0
     struct sockaddr_in server_addr = {0};
