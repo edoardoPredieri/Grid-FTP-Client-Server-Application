@@ -682,14 +682,19 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                 }
 
                 buf[msg_len] = '\0';
-
+                
+                
                 // forge the Auth query
-                char* query =(char*) malloc(sizeof(char)*5000);
+                char* query =(char*) malloc(sizeof(char)*20);
+                int i=0;
+                for(i=0;i<20;i++){
+					query[i]=0;
+				}
                 strcat(query,"Auth ");
                 strcat(query,tmp);
                 strcat(query," ");
                 strcat(query,passw);
-
+                
                 // compare the query with login
                 if (strcmp(query, buf)==0){
                     sprintf(buf,"K %s", key);
@@ -733,7 +738,7 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                     strcat(query,passw);
 
                     if (strcmp(query, buf)==0){
-                        sprintf(buf,"%s", key);
+                        sprintf(buf,"K %s", key);
                         while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                             if (errno == EINTR)
                                 continue;
@@ -968,8 +973,8 @@ void *connection_handler(void *arg){
 
     num_client--;
 
-    free(args->client_addr);
-    free(args);
+   // free(args->client_addr);
+   // free(args);
     pthread_exit(NULL);
 }
 
