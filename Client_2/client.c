@@ -63,7 +63,7 @@ char* getBlock(int DR, char* k, char* n, int size, int sizeq, int id){
 
         ret = close(socket_desc);
         ERROR_HELPER(ret, "Cannot close socket");
-
+        
         buf[sizeFin]='\0';
 
         char* sret=(char*)malloc(sizeof(char)*sizeFin); 

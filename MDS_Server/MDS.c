@@ -74,6 +74,23 @@ int isListFile(file* f, char* name, int p){
     return 0;
 }
 
+
+int isInFile(file* l, char* n, int p){
+	file* tmp =l;
+    int i=0;
+    while(tmp!=NULL){
+        if(strcmp(tmp->name, n)==0){
+            while(tmp->blocks[i]!=0){
+                if(atoi(tmp->blocks[i])==p)
+                    return 1;
+                i++;
+            }
+        }
+        tmp=tmp->next;
+    }
+    return 0;
+}
+
 int getSize(file* l, char* n){
 	file* tmp =l;
     while(tmp!=NULL){
@@ -383,7 +400,7 @@ int isOnline(int p, dr** drList){
     return 1;
 }
 
-int* Put(int socket_desc, char* k, dr** drList,int size){
+int* Put(int socket_desc, char* k, dr** drList, int size, file* fileList, char* name){
 	char buf[1024];
     size_t buf_len = sizeof(buf);
     size_t msg_len;
@@ -399,7 +416,7 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
     int ret = sem_wait(thread_sem);
 	ERROR_HELPER(ret, "Error in sem_wait");
     sendKey(tmp, k);
-     ret = sem_post(thread_sem);
+    ret = sem_post(thread_sem);
     ERROR_HELPER(ret, "Error in sem_post");
 
     int i=0;
@@ -415,10 +432,10 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 					i++;
 				}
 				j=i;
-				if(rest>0){
+				if(rest>0 && !isInFile(fileList->next, name, tmp->port)){
 					tmp->mem = tmp->mem - sizeBlock- 1;
 				}
-				else{
+                if (rest<=0 && !isInFile(fileList->next, name, tmp->port)){
 					tmp->mem = tmp->mem - sizeBlock;
 				}
 				rest--;
@@ -589,7 +606,12 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
 
 file* RemoveFile(file* fileList, char* name){
 	file* tmp =fileList;
-	tmp=tmp->next;
+    if(tmp->next!=NULL){
+        tmp=tmp->next;
+    }
+    else{
+        return fileList;
+    }
 
 	if(strcmp(tmp->name, name)==0){
 		if(tmp->next!=NULL)
@@ -682,8 +704,8 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                 }
 
                 buf[msg_len] = '\0';
-                
-                
+
+
                 // forge the Auth query
                 char* query =(char*) malloc(sizeof(char)*20);
                 int i=0;
@@ -694,7 +716,7 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                 strcat(query,tmp);
                 strcat(query," ");
                 strcat(query,passw);
-                
+
                 // compare the query with login
                 if (strcmp(query, buf)==0){
                     sprintf(buf,"K %s", key);
@@ -908,10 +930,12 @@ void *connection_handler(void *arg){
                 char* name=query[1];
                 int size=atoi(query[2]);
 
-                int* l=Put(socket_desc, actualClient->key, &actualClient->drList, size);
+                int* l=Put(socket_desc, actualClient->key, &actualClient->drList, size, actualClient->fileList, name);
 
+                actualClient->fileList=RemoveFile(actualClient->fileList, name);
 				actualClient->fileList=insTailFILE(actualClient->fileList, name, size, str_split(getDR(&actualClient->drList),' '));
 
+                printFile(actualClient->fileList->next);
 				printDR(actualClient->drList);
 
                 free(query);
