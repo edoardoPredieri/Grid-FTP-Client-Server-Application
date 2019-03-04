@@ -10,10 +10,8 @@
 
 #include "common.h"
 
-int ID = 002;
-
+// receive blocks from DRs
 char* getBlock(int DR, char* k, char* n, int size, int sizeq, int id){
-
     int rest=size%sizeq;
     int sizeTmp=(int) size/sizeq;
     int sizeFin=0;
@@ -21,7 +19,6 @@ char* getBlock(int DR, char* k, char* n, int size, int sizeq, int id){
     if((id+1) <= rest){
         sizeFin=sizeTmp+1;
     }
-
     else{
         sizeFin=sizeTmp;
     }
@@ -75,6 +72,7 @@ char* getBlock(int DR, char* k, char* n, int size, int sizeq, int id){
     return NULL;
 }
 
+// send blocks to DRs
 void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
     char* b=(char*)malloc(sizeof(char)*(stop-start));
 
@@ -133,8 +131,8 @@ void sendBlock(int DR, char* k, char* n, char* totFile, int start, int stop){
     free(b);
 }
 
+// save the size of files
 int saveSize(char* name, int size){
-
     FILE* f = fopen("fileSize.txt", "r");
 
     while(1){
@@ -148,12 +146,10 @@ int saveSize(char* name, int size){
             free(tmp);
             return 1;
         }
-
     }
     fclose(f);
 
     f = fopen("fileSize.txt", "a");
-
     fprintf(f,"%s ",name);
     fprintf(f,"%d\n",size);
     fclose(f);
@@ -228,29 +224,30 @@ char** str_split(char* a_str, const char a_delim, int* size){
     return result;
 }
 
+// understand the command that the user has made
 int getFlag(char* buf, int* s, char** n){
     int ret=0;
-    int* sizeq=(int*)malloc(sizeof(int));
+    int sizeq;
 
 	if(strncmp (buf, "GetDR",5 )==0){
 		ret=1;
 	}
+
 	else if(strncmp (buf, "Put",3 )==0){
-        char** query=str_split(buf,' ',sizeq);
+        char** query=str_split(buf,' ',&sizeq);
         char* name=query[1];
         int size=atoi(query[2]);
 
         if(!saveSize(name,size)){
             printf("Error during save size of file\n");
         }
-
         *n=name;
         *s=size;
 		ret=2;
-
 	}
+
 	else if(strncmp (buf, "Get",3 )==0){
-        char** query=str_split(buf,' ',sizeq);
+        char** query=str_split(buf,' ',&sizeq);
         char* name=query[1];
         *n=name;
 		ret=3;
@@ -260,7 +257,6 @@ int getFlag(char* buf, int* s, char** n){
 		ret=4;
 	}
 
-    free(sizeq);
 	return ret;
 }
 
@@ -351,31 +347,41 @@ int main(int argc, char* argv[]){
 
         printf("Server response: %s\n", buf); // no need to insert '\0'
 
+        // PUT command
         if(flag==2){
             int h=0, i=0;
-            int* sizeq=(int*)malloc(sizeof(int));
-            int* sizeq2=(int*)malloc(sizeof(int));
+            int sizeq;
+            int sizeq2;
 
-            char** query=str_split(buf,',',sizeq);
+            char** query=str_split(buf,',',&sizeq);
+            char** q;
 
+            int* DR=(int*)malloc(sizeof(int)*sizeq);
+            int* start=(int*)malloc(sizeof(int)*sizeq);
+            int* stop=(int*)malloc(sizeof(int)*sizeq);
 
-            int* DR=(int*)malloc(sizeof(int)*(*sizeq));
-            int* start=(int*)malloc(sizeof(int)*(*sizeq));
-            int* stop=(int*)malloc(sizeof(int)*(*sizeq));
-
-            for(h;h<=(*sizeq);h++){
-                char** q=str_split(query[h],' ',sizeq2);
+            for(h;h<=sizeq;h++){
+                q=str_split(query[h],' ',&sizeq2);
                 DR[h]=atoi(q[0]);
                 start[h]=atoi(q[1]);
                 stop[h]=atoi(q[2]);
             }
 
-            onlineDR=(int*)malloc(sizeof(int)*(*sizeq));
-            for(h=0;h<=(*sizeq);h++){
+            onlineDR=(int*)malloc(sizeof(int)*sizeq);
+            for(h=0;h<=sizeq;h++){
                 onlineDR[h]=DR[h];
             }
 
             FILE* f=fopen(name,"r");
+            if(f==NULL){
+                printf("File doesn't exist\n");
+                free(query);
+                free(q);
+                free(DR);
+                free(start);
+                free(stop);
+                break;
+            }
             int n=1,j=0;
             char* fileBuf=(char*)malloc(sizeof(char)*n);
 
@@ -394,15 +400,20 @@ int main(int argc, char* argv[]){
             int s=j;
             fclose(f);
 
-            for(i=0;i<=(*sizeq);i++){
+            for(i=0;i<=sizeq;i++){
                 sendBlock(DR[i], key, name, fileBuf, start[i], stop[i]);
             }
-            free(sizeq);
-            free(sizeq2);
+
+            free(query);
+            free(q);
+            free(DR);
+            free(start);
+            free(stop);
+            free(fileBuf);
         }
 
+        // GET command
         else if(flag==3){
-
             size=getSize(name);
 
             if(size==0){
@@ -410,8 +421,8 @@ int main(int argc, char* argv[]){
                 break;
             }
 
-            int* sizeq=(int*)malloc(sizeof(int));
-            char** query=str_split(buf,' ',sizeq);
+            int sizeq;
+            char** query=str_split(buf,' ',&sizeq);
             int i=0;
 
             char* bufFin=(char*)malloc(sizeof(char)*size);
@@ -419,24 +430,30 @@ int main(int argc, char* argv[]){
 				bufFin[i]=0;
 			}
 
-            for(i=0;i<(*sizeq);i++){
-                strcat(bufFin,getBlock(atoi(query[i]), key, name, size, *sizeq, i));
+            for(i=0;i<sizeq;i++){
+                strcat(bufFin,getBlock(atoi(query[i]), key, name, size, sizeq, i));
             }
 
             FILE* f2=fopen(name,"w");
+            if(f2==NULL){
+                printf("Erron during opening the file\n");
+                free(query);
+                free(bufFin);
+                break;
+            }
             fputs(bufFin,f2);
             fclose(f2);
 
-            free(sizeq);
+            free(query);
+            free(bufFin);
         }
 
         else if(flag==4){
-            int* sizeq=(int*)malloc(sizeof(int));
-            char** query=str_split(buf,' ',sizeq);
+            int sizeq;
+            char** query=str_split(buf,' ',&sizeq);
             key=query[1];
         }
     }
-
 
     // close the socket
     ret = close(socket_desc);
@@ -444,5 +461,8 @@ int main(int argc, char* argv[]){
 
     if (DEBUG) fprintf(stderr, "Exiting...\n");
 
+    free(key);
+    free(onlineDR);
+    free(name);
     exit(EXIT_SUCCESS);
 }

@@ -402,8 +402,6 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
      ret = sem_post(thread_sem);
     ERROR_HELPER(ret, "Error in sem_post");
 
-
-
     int i=0;
     int j=0;
     while(tmp!=NULL){
@@ -438,7 +436,6 @@ int* Put(int socket_desc, char* k, dr** drList,int size){
 		}
 		tmp=tmp->next;
     }
-
 
 	int first=0;
 	char* s=(char*)malloc(sizeof(char)*100);
@@ -520,6 +517,9 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
     int id=0;
     int ret;
 
+    ret = sem_wait(thread_sem);
+    ERROR_HELPER(ret, "Error in sem_wait");
+
     while(tmp!=NULL){
 		if(tmp->online && isListFile(f->next,name,tmp->port)){
             int n;
@@ -536,9 +536,6 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
             else{
                 tmp->mem+=sizeTmp;
             }
-
-            ret = sem_wait(thread_sem);
-            ERROR_HELPER(ret, "Error in sem_wait");
 
             char buf[1024];
             size_t buf_len = sizeof(buf);
@@ -822,8 +819,8 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
 	return 1;
 }
 
+// thread function
 void *connection_handler(void *arg){
-
     handler_args_t *args = (handler_args_t *)arg;
 
     int socket_desc = args->socket_desc;
@@ -969,8 +966,6 @@ void *connection_handler(void *arg){
     if (DEBUG)
         fprintf(stderr, "Thread created to handle the request has completed.\n");
 
-    //free(tmpClient);
-    //clientList[num_client]=NULL;
     num_client--;
 
     free(args->client_addr);
@@ -985,7 +980,7 @@ int main(int argc, char *argv[]){
     int ret;
     int socket_desc, client_desc;
 
-    ret = sem_init(thread_sem, 1, 5);   //5=maxDR
+    ret = sem_init(thread_sem, 1, MAXDR);
 	ERROR_HELPER(ret, "Error in initialization of thread_sem");
 
     // some fields are required to be filled with 0

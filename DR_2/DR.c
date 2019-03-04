@@ -9,11 +9,16 @@
 #include <arpa/inet.h>  // htons()
 #include <netinet/in.h> // struct sockaddr_in
 #include <sys/socket.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
 #include "common.h"
 
 char* path="keys.txt";
 int keySize=8;
+
+sem_t* thread_sem;
 
 typedef struct handler_args_s{
     int socket_desc;
@@ -121,11 +126,15 @@ void *connection_handler(void *arg){
                 char** query=str_split(buf,' ');
                 char* key=query[1];
 
+                ret = sem_wait(thread_sem);
+                ERROR_HELPER(ret, "Error in sem_wait");
                 if(!verifyKey(key)){
                     FILE* f=fopen(path, "a");
                     fprintf(f,"%s",key);
                     fclose(f);
                 }
+                ret = sem_post(thread_sem);
+                ERROR_HELPER(ret, "Error in sem_post");
 
                 sprintf(buf, "OK");
                 msg_len = strlen(buf);
@@ -149,9 +158,13 @@ void *connection_handler(void *arg){
             if(verifyKey(key)){
                 strcat(key,name);
 
+                ret = sem_wait(thread_sem);
+                ERROR_HELPER(ret, "Error in sem_wait");
                 FILE* f=fopen(key,"w");
                 fputs(block,f);
                 fclose(f);
+                ret = sem_post(thread_sem);
+                ERROR_HELPER(ret, "Error in sem_post");
 
                 sprintf(buf, "Block received");
                 msg_len = strlen(buf);
@@ -180,10 +193,10 @@ void *connection_handler(void *arg){
             char* name=query[1];
             char* key=query[2];
 
-            //---------------------- if key in mykey
-
             key=strcat(key,name);
 
+            ret = sem_wait(thread_sem);
+            ERROR_HELPER(ret, "Error in sem_wait");
             FILE* f=fopen(key,"r");
 
             int n=1,j=0;
@@ -212,6 +225,9 @@ void *connection_handler(void *arg){
                     continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
             }
+
+            ret = sem_post(thread_sem);
+            ERROR_HELPER(ret, "Error in sem_post");
             break;
         }
 
@@ -271,6 +287,10 @@ void *connection_handler(void *arg){
 int main(int argc, char *argv[]){
     int ret;
 
+    thread_sem=(sem_t*)malloc(sizeof(sem_t));
+    ret = sem_init(thread_sem, 1, 5);   //5=maxClient
+	ERROR_HELPER(ret, "Error in initialization of thread_sem");
+
     int socket_desc, client_desc;
 
     // some fields are required to be filled with 0
@@ -307,8 +327,6 @@ int main(int argc, char *argv[]){
     while (1){
         // accept incoming connection
         client_desc = accept(socket_desc, (struct sockaddr *)client_addr, (socklen_t *)&sockaddr_len);
-
-
 
         if (client_desc == -1 && errno == EINTR)
             continue; // check for interruption by signals

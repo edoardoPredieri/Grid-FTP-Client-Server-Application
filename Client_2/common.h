@@ -18,5 +18,6 @@
 #define SERVER_ADDRESS  "127.0.0.1"
 #define SERVER_COMMAND  "QUIT"
 #define SERVER_PORT     2015
+#define ID 002
 
 #endif

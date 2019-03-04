@@ -1,2 +1,4 @@
 prova1.txt 12
 prova3.txt 20
+prova2.svg 266
+dio 2
