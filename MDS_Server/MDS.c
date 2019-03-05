@@ -55,26 +55,6 @@ char* pathD = "dr.txt";
 
 
 
-
-int isListFile(file* f, char* name, int p){
-    file *tmpf=f;
-
-    while(tmpf!=NULL){
-
-        if(strncmp (tmpf->name, name,strlen(name))==0){
-            int i=0;
-            for(i;i<tmpf->size;i++){
-                if(atoi(tmpf->blocks[i]) == p){
-                    return 1;
-                }
-            }
-        }
-        tmpf=tmpf->next;
-    }
-    return 0;
-}
-
-
 int isInFile(file* l, char* n, int p){
 	file* tmp =l;
     int i=0;
@@ -538,7 +518,7 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
     ERROR_HELPER(ret, "Error in sem_wait");
 
     while(tmp!=NULL){
-		if(tmp->online && isListFile(f->next,name,tmp->port)){
+		if(tmp->online && isInFile(f->next,name,tmp->port)){
             int n;
             char* s=Get(f, name, &l, &n);
 
@@ -547,11 +527,17 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
 
 
             if((id+1) <= rest){
-                tmp->mem+=(sizeTmp+1);
+				if(tmp->mem+(sizeTmp+1) < 1000)
+					tmp->mem+=(sizeTmp+1);
+				else
+					tmp->mem=1000;
             }
 
             else{
-                tmp->mem+=sizeTmp;
+				if(tmp->mem+sizeTmp < 1000)
+					tmp->mem+=sizeTmp;
+				else
+					tmp->mem=1000;
             }
 
             char buf[1024];
@@ -931,13 +917,14 @@ void *connection_handler(void *arg){
                 int size=atoi(query[2]);
 
                 int* l=Put(socket_desc, actualClient->key, &actualClient->drList, size, actualClient->fileList, name);
-
-                actualClient->fileList=RemoveFile(actualClient->fileList, name);
+			
+               // actualClient->fileList=RemoveFile(actualClient->fileList, name);
 				actualClient->fileList=insTailFILE(actualClient->fileList, name, size, str_split(getDR(&actualClient->drList),' '));
 
+				printf("ok\n");
                 printFile(actualClient->fileList->next);
 				printDR(actualClient->drList);
-
+				printf("ok\n");
                 free(query);
             }
 
@@ -967,6 +954,8 @@ void *connection_handler(void *arg){
                 actualClient->drList=removeListD(actualClient->drList, size, name, actualClient->key, actualClient->fileList);
 
                 actualClient->fileList=RemoveFile(actualClient->fileList, name);
+
+				printFile(actualClient->fileList->next);
 
                 sprintf(buf,"OK");
                 printDR(actualClient->drList);
