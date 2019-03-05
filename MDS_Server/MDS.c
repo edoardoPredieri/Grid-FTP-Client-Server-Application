@@ -54,7 +54,7 @@ char* pathL = "login.txt";
 char* pathD = "dr.txt";
 
 
-
+// check if one part of file n is in DR p
 int isInFile(file* l, char* n, int p){
 	file* tmp =l;
     int i=0;
@@ -71,6 +71,7 @@ int isInFile(file* l, char* n, int p){
     return 0;
 }
 
+// get file's size
 int getSize(file* l, char* n){
 	file* tmp =l;
     while(tmp!=NULL){
@@ -135,6 +136,7 @@ void sendKey(dr* l, char* k){
 	sendKey(l->next, k);
 }
 
+// print the DR's list
 void printFile(file* l){
 	if(l==NULL)
 		return;
@@ -146,6 +148,7 @@ void printFile(file* l){
 	printFile(l->next);
 }
 
+// print the File's list
 void printDR(dr* l){
 	if(l==NULL)
 		return;
@@ -153,6 +156,7 @@ void printDR(dr* l){
 	printDR(l->next);
 }
 
+// return the number of online DRs
 int onlineDR(dr*l){
     if (l==NULL){
         return 0;
@@ -304,6 +308,7 @@ dr* init(){
     return drList->next;
 }
 
+// checks the online DRs
 dr* check(dr** drList){
 	dr* tmp=*drList;
 
@@ -345,15 +350,16 @@ dr* check(dr** drList){
 	return *drList;
 }
 
+// GetDR command
 char* getDR(dr** drList){
     *drList=check(drList);
 
     int online=onlineDR(*drList);
-    char* s=(char*)malloc(sizeof(char)*5*online);
+    char* s=(char*)malloc(sizeof(char)*MAXDR*online);
     int i=0;
-    for(i;i<5*online;i++){
+    for(i;i<MAXDR*online;i++)
 		s[i]=0;
-	}
+
     dr* tmp=*drList;
 
     while(tmp!=NULL){
@@ -366,6 +372,7 @@ char* getDR(dr** drList){
     return s;
 }
 
+// check if DR p is online
 int isOnline(int p, dr** drList){
     *drList=check(drList);
 
@@ -380,6 +387,7 @@ int isOnline(int p, dr** drList){
     return 1;
 }
 
+// Put command
 int* Put(int socket_desc, char* k, dr** drList, int size, file* fileList, char* name){
 	char buf[1024];
     size_t buf_len = sizeof(buf);
@@ -470,6 +478,7 @@ int* Put(int socket_desc, char* k, dr** drList, int size, file* fileList, char* 
     return l;
 }
 
+// Get command
 char* Get(file* fileList, char* name, dr** drList, int* n){
 	file* tmp =fileList;
 	char* s;
@@ -509,6 +518,7 @@ char* Get(file* fileList, char* name, dr** drList, int* n){
 	return NULL;
 }
 
+// Remove command
 dr* removeListD(dr* l, int size, char* name, char* k, file* f){
 	dr* tmp =l;
     int id=0;
@@ -590,6 +600,7 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
     return l;
 }
 
+// remove a File
 file* RemoveFile(file* fileList, char* name){
 	file* tmp =fileList;
     if(tmp->next!=NULL){
@@ -621,6 +632,7 @@ file* RemoveFile(file* fileList, char* name){
 	return fileList;
 }
 
+// insert a Client
 client* insTailCLIENT(client* l, int id, char* key){
     client* tmp = l;
 
@@ -638,6 +650,7 @@ client* insTailCLIENT(client* l, int id, char* key){
     return l;
 }
 
+// get a Client
 client* getClient(int id, struct client* client_list){
     client* tmp = client_list;
 
@@ -650,6 +663,7 @@ client* getClient(int id, struct client* client_list){
     return NULL;
 }
 
+// verification function (Login or Registration)
 int verify_client(int id, int socket_desc, struct client** client_list, struct client** actual_client){
     int ret = sem_wait(thread_sem);
     ERROR_HELPER(ret, "Error in sem_wait");
@@ -659,15 +673,13 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
     char* key =itoa(id^12139456);
 
     while(1){
-        char* tmp=malloc(sizeof(char)*3);
+        char* tmp=malloc(sizeof(char)*3);   //3 size of Client's ID
 
-        if(fscanf(f,"%s",tmp)==EOF){
+        if(fscanf(f,"%s",tmp)==EOF)
             break;
-        }
 
         // verify if the client is already registered
         if(atoi(tmp)==id){
-
                 char* passw = malloc(sizeof(char)*20);
                 fscanf(f,"%s",passw);
 
@@ -695,9 +707,9 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
                 // forge the Auth query
                 char* query =(char*) malloc(sizeof(char)*20);
                 int i=0;
-                for(i=0;i<20;i++){
+                for(i=0;i<20;i++)
 					query[i]=0;
-				}
+
                 strcat(query,"Auth ");
                 strcat(query,tmp);
                 strcat(query," ");
@@ -858,8 +870,7 @@ void *connection_handler(void *arg){
     sprintf(buf, "Welcome to Grid FTP Client-Server Application made by Edoardo Predieri. I will stop if you send me %s, Press 'Send' \n", quit_command);
     msg_len = strlen(buf);
     while ((ret = send(socket_desc, buf, msg_len, 0)) < 0){
-        if (errno == EINTR)
-            continue;
+        if (errno == EINTR) continue;
         ERROR_HELPER(-1, "Cannot write to the socket");
     }
 
@@ -899,15 +910,13 @@ void *connection_handler(void *arg){
 
             // if I receive GetDR command
             if(strncmp (buf, "GetDR",5 )==0){
-				char* s=getDR(&actualClient->drList);
-                sprintf(buf,"%s",s);
+                sprintf(buf,"%s",getDR(&actualClient->drList));
                 printDR(actualClient->drList);
                 while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
-                free(s);
             }
 
             // if I receive Put command
@@ -917,14 +926,12 @@ void *connection_handler(void *arg){
                 int size=atoi(query[2]);
 
                 int* l=Put(socket_desc, actualClient->key, &actualClient->drList, size, actualClient->fileList, name);
-			
-               // actualClient->fileList=RemoveFile(actualClient->fileList, name);
+
 				actualClient->fileList=insTailFILE(actualClient->fileList, name, size, str_split(getDR(&actualClient->drList),' '));
 
-				printf("ok\n");
                 printFile(actualClient->fileList->next);
 				printDR(actualClient->drList);
-				printf("ok\n");
+
                 free(query);
             }
 
@@ -933,43 +940,60 @@ void *connection_handler(void *arg){
                 char** query=str_split(buf,' ');
                 char* name=query[1];
 
-                int n;
-
-                char* s=Get(actualClient->fileList, name, &actualClient->drList, &n);
-                sprintf(buf,"%s",s);
-                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
-                if (errno == EINTR)
-                    continue;
-                    ERROR_HELPER(-1, "Cannot write to the socket");
+                if(!getSize(actualClient->fileList->next,name)){
+                    sprintf(buf,"%s","NOK");
+                    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                        if (errno == EINTR)
+                            continue;
+                        ERROR_HELPER(-1, "Cannot write to the socket");
+                    }
+                }
+                else{
+                    int n;
+                    sprintf(buf,"%s",Get(actualClient->fileList, name, &actualClient->drList, &n));
+                    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                        ERROR_HELPER(-1, "Cannot write to the socket");
+                    }
                 }
                 free(query);
 			}
 
+            // if I receive Remove command
 			else if(strncmp (buf, "Remove",6 )==0){
 				char** query=str_split(buf,' ');
                 char* name=query[1];
 
-                int size=getSize(actualClient->fileList->next,name);
+                if(!getSize(actualClient->fileList->next,name)){
+                    sprintf(buf,"%s","NOK");
+                    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                        if (errno == EINTR)
+                            continue;
+                        ERROR_HELPER(-1, "Cannot write to the socket");
+                    }
+                }
+                else{
+                    int size=getSize(actualClient->fileList->next,name);
+                    actualClient->drList=removeListD(actualClient->drList, size, name, actualClient->key, actualClient->fileList);
+                    actualClient->fileList=RemoveFile(actualClient->fileList, name);
+                    printFile(actualClient->fileList->next);
 
-                actualClient->drList=removeListD(actualClient->drList, size, name, actualClient->key, actualClient->fileList);
-
-                actualClient->fileList=RemoveFile(actualClient->fileList, name);
-
-				printFile(actualClient->fileList->next);
-
-                sprintf(buf,"OK");
-                printDR(actualClient->drList);
-                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
-                if (errno == EINTR)
-                    continue;
-                    ERROR_HELPER(-1, "Cannot write to the socket");
+                    sprintf(buf,"OK");
+                    printDR(actualClient->drList);
+                    while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                        if (errno == EINTR)
+                            continue;
+                        ERROR_HELPER(-1, "Cannot write to the socket");
+                    }
                 }
                 free(query);
 			}
 
             else{
-                // ... or if I have to send the message back
-                while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
+                // ... or if I have to send the error message back
+                sprintf(buf,"%s","Unknown command");
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                     if (errno == EINTR)
                         continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");

@@ -63,10 +63,10 @@ char* getBlock(int DR, char* k, char* n, int size, int sizeq, int id){
 
         ret = close(socket_desc);
         ERROR_HELPER(ret, "Cannot close socket");
-        
+
         buf[sizeFin]='\0';
 
-        char* sret=(char*)malloc(sizeof(char)*sizeFin); 
+        char* sret=(char*)malloc(sizeof(char)*sizeFin);
         sret=strcpy(sret, buf);
 
         return sret;
@@ -159,6 +159,7 @@ int saveSize(char* name, int size){
     return 1;
 }
 
+// get the file's size
 int getSize(char* n){
     FILE* f = fopen("fileSize.txt", "r");
 
@@ -239,6 +240,14 @@ int getFlag(char* buf, int* s, char** n){
         char** query=str_split(buf,' ',&sizeq);
         char* name=query[1];
         int size=atoi(query[2]);
+
+        FILE* f = fopen(name, "r");
+        if(f==NULL){
+            printf("File doesn't not exist\n");
+            return -1;
+        }
+
+        fclose(f);
 
         if(!saveSize(name,size)){
             printf("Error during save size of file\n");
@@ -327,6 +336,7 @@ int main(int argc, char* argv[]){
         msg_len = strlen(buf);
         buf[--msg_len] = '\0'; // remove '\n' from the end of the message
 
+
         // send message to server
         while ( (ret = send(socket_desc, buf, msg_len, 0)) < 0) {
             if (errno == EINTR) continue;
@@ -340,14 +350,14 @@ int main(int argc, char* argv[]){
 
         flag=getFlag(buf, &size, &name);
 
-
         // read message from server
         while ( (msg_len = recv(socket_desc, buf, buf_len, 0)) < 0 ) {
             if (errno == EINTR) continue;
             ERROR_HELPER(-1, "Cannot read from socket");
         }
 
-        printf("Server response: %s\n", buf); // no need to insert '\0'
+        if(flag!=-1)
+            printf("Server response: %s\n", buf); // no need to insert '\0'
 
         // PUT command
         if(flag==2){
@@ -416,6 +426,11 @@ int main(int argc, char* argv[]){
 
         // GET command
         else if(flag==3){
+            if(strncmp (buf, "NOK",3 )==0){
+                printf("Error during Get, or File doesn't exist or is not saved\n");
+                continue;
+            }
+
             size=getSize(name);
 
             if(size==0){
@@ -450,6 +465,7 @@ int main(int argc, char* argv[]){
             free(bufFin);
         }
 
+        // Auth command
         else if(flag==4){
             int sizeq;
             char** query=str_split(buf,' ',&sizeq);
