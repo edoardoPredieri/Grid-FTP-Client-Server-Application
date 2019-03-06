@@ -19,5 +19,6 @@
 #define SERVER_COMMAND  "QUIT"
 #define SERVER_PORT     2015
 #define MAXDR	5
+#define DIMDR	1024
 
 #endif

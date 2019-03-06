@@ -272,7 +272,7 @@ dr* init(){
         int pos=i;
         int port=atoi(tmp);
         int online;
-        int mem=1000;
+        int mem=DIMDR;
 
 		// variables for handling a socket
 		int socket_desc;
@@ -537,17 +537,17 @@ dr* removeListD(dr* l, int size, char* name, char* k, file* f){
 
 
             if((id+1) <= rest){
-				if(tmp->mem+(sizeTmp+1) < 1000)
+				if(tmp->mem+(sizeTmp+1) < DIMDR)
 					tmp->mem+=(sizeTmp+1);
 				else
-					tmp->mem=1000;
+					tmp->mem=DIMDR;
             }
 
             else{
-				if(tmp->mem+sizeTmp < 1000)
+				if(tmp->mem+sizeTmp < DIMDR)
 					tmp->mem+=sizeTmp;
 				else
-					tmp->mem=1000;
+					tmp->mem=DIMDR;
             }
 
             char buf[1024];
@@ -1010,8 +1010,8 @@ void *connection_handler(void *arg){
 
     num_client--;
 
-   // free(args->client_addr);
-   // free(args);
+    free(args->client_addr);
+    free(args);
     pthread_exit(NULL);
 }
 

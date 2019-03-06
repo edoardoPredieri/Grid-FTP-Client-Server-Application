@@ -70,6 +70,7 @@ char** str_split(char* a_str, const char a_delim){
 
 int verifyKey(char* k){
 	FILE* f = fopen(path, "r");
+    if(f==NULL) return 0;
 	while(1){
         char* tmp=malloc(sizeof(char)*keySize);
 
@@ -143,9 +144,9 @@ void *connection_handler(void *arg){
                     continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
+                free(key);
+                free(query);
                 break;
-
-                //free(query);
         }
 
         else if(strncmp (buf, "Put",3 )==0){
@@ -173,6 +174,10 @@ void *connection_handler(void *arg){
                         continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
+                free(block);
+                free(name);
+                free(key);
+                free(query);
                 break;
             }
             else{
@@ -183,52 +188,72 @@ void *connection_handler(void *arg){
                         continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
+                free(block);
+                free(name);
+                free(key);
+                free(query);
                 break;
             }
         }
 
         else if(strncmp (buf, "Get",3 )==0){
-
             char** query=str_split(buf,'$');
             char* name=query[1];
             char* key=query[2];
 
-            key=strcat(key,name);
+            if(verifyKey(key)){
+                key=strcat(key,name);
 
-            ret = sem_wait(thread_sem);
-            ERROR_HELPER(ret, "Error in sem_wait");
-            FILE* f=fopen(key,"r");
+                ret = sem_wait(thread_sem);
+                ERROR_HELPER(ret, "Error in sem_wait");
+                FILE* f=fopen(key,"r");
 
-            int n=1,j=0;
-            char* fileBuf=(char*)malloc(sizeof(char)*n);
+                int n=1,j=0;
+                char* fileBuf=(char*)malloc(sizeof(char)*n);
 
-            while(1){
-                if(j>=n){
-                    n=n*2;
-                    fileBuf=(char*)realloc(fileBuf, n*sizeof(char));
+                while(1){
+                    if(j>=n){
+                        n=n*2;
+                        fileBuf=(char*)realloc(fileBuf, n*sizeof(char));
+                    }
+                    char tmp[1];
+                    if(fscanf(f,"%c",tmp)==EOF)
+                        break;
+
+                    fileBuf[j]=tmp[0];
+                    j++;
                 }
-                char tmp[1];
-                if(fscanf(f,"%c",tmp)==EOF){
-                    break;
-                }
 
-                fileBuf[j]=tmp[0];
-                j++;
-            }
+                fclose(f);
 
-            fclose(f);
-
-            sprintf(buf, "%s",fileBuf);
-            msg_len = strlen(buf);
-            while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
-                if (errno == EINTR)
-                    continue;
+                sprintf(buf, "%s",fileBuf);
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
-            }
+                }
 
-            ret = sem_post(thread_sem);
-            ERROR_HELPER(ret, "Error in sem_post");
-            break;
+                ret = sem_post(thread_sem);
+                ERROR_HELPER(ret, "Error in sem_post");
+                free(name);
+                free(key);
+                free(query);
+                break;
+            }
+            else{
+                sprintf(buf, "Error: Key not valid");
+                msg_len = strlen(buf);
+                while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
+                    if (errno == EINTR)
+                        continue;
+                    ERROR_HELPER(-1, "Cannot write to the socket");
+                }
+                free(name);
+                free(key);
+                free(query);
+                break;
+            }
         }
 
         else if(strncmp (buf, "Remove",6 )==0){
@@ -247,6 +272,8 @@ void *connection_handler(void *arg){
                         continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
+                free(name);
+                free(query);
                 break;
             }
             else{
@@ -257,14 +284,16 @@ void *connection_handler(void *arg){
                         continue;
                     ERROR_HELPER(-1, "Cannot write to the socket");
                 }
+                free(name);
+                free(query);
                 break;
             }
         }
 
-
         else{
-            // ... or if I have to send the message back
-            while ((ret = send(socket_desc, buf, recv_bytes, 0)) < 0){
+            // ... or if I have to send the error message back
+            sprintf(buf,"%s","Error");
+            while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
                 if (errno == EINTR)
                     continue;
                 ERROR_HELPER(-1, "Cannot write to the socket");
