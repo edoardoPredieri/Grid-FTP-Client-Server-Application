@@ -1,2 +1,0 @@
-prova1.txt 12
-prova3.txt 20

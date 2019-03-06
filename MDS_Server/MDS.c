@@ -827,7 +827,7 @@ int verify_client(int id, int socket_desc, struct client** client_list, struct c
     // write on file
     fprintf(f,"%s",query);
 
-    sprintf(buf, "%s", key);
+    sprintf(buf, "K %s", key);
     while ((ret = send(socket_desc, buf, sizeof(buf), 0)) < 0){
         if (errno == EINTR)
             continue;
