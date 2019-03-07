@@ -867,7 +867,7 @@ void *connection_handler(void *arg){
     uint16_t client_port = ntohs(client_addr->sin_port);
 
     // send welcome message
-    sprintf(buf, "Welcome to Grid FTP Client-Server Application made by Edoardo Predieri. I will stop if you send me %s, Press 'Send' \n", quit_command);
+    sprintf(buf, "Welcome to Grid FTP Client-Server Application made by Edoardo Predieri. I will stop if you send me %s, Press 'Enter' \n", quit_command);
     msg_len = strlen(buf);
     while ((ret = send(socket_desc, buf, msg_len, 0)) < 0){
         if (errno == EINTR) continue;
